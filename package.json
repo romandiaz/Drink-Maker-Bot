@@ -1,0 +1,16 @@
+{
+  "name": "bartender-kiosk",
+  "version": "0.1.0",
+  "description": "Touchscreen UI for a home-built drink dispensing robot",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server/index.js",
+    "dev": "node --watch src/server/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
