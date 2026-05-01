@@ -6,3 +6,6 @@ node_modules/
 .idea/
 dist/
 build/
+
+# Application state data
+src/server/state/
