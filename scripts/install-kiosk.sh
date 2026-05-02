@@ -61,13 +61,26 @@ echo "==> Updating apt and installing packages..."
 sudo apt-get update
 
 # Pi OS Bookworm shipped `chromium-browser`; Trixie renamed it to `chromium`
-# (and the binary too). Pick whichever is available.
-if apt-cache show chromium-browser >/dev/null 2>&1; then
+# (and the binary too). `apt-cache policy` reports the install candidate;
+# transitional/virtual packages report "(none)" and we treat that as missing.
+candidate() {
+  apt-cache policy "$1" 2>/dev/null | awk '/Candidate:/ { print $2; exit }'
+}
+
+CHROMIUM_PKG=
+if c=$(candidate chromium-browser) && [[ -n "$c" && "$c" != "(none)" ]]; then
   CHROMIUM_PKG=chromium-browser
-elif apt-cache show chromium >/dev/null 2>&1; then
+elif c=$(candidate chromium) && [[ -n "$c" && "$c" != "(none)" ]]; then
   CHROMIUM_PKG=chromium
-else
-  echo "Neither chromium-browser nor chromium is available in apt." >&2
+fi
+
+if [[ -z "$CHROMIUM_PKG" ]]; then
+  echo "Neither chromium-browser nor chromium has an installation candidate." >&2
+  echo "Diagnostics follow — please share these if you need help:" >&2
+  echo "--- apt-cache policy chromium-browser ---" >&2
+  apt-cache policy chromium-browser >&2 || true
+  echo "--- apt-cache policy chromium ---" >&2
+  apt-cache policy chromium >&2 || true
   exit 1
 fi
 echo "    using chromium package: $CHROMIUM_PKG"
