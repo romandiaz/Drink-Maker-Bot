@@ -11,24 +11,35 @@ Touchscreen UI for a home-built drink dispensing robot. Runs on a Raspberry Pi w
 
 ## Quickstart (on the Pi)
 
+Target image: **Raspberry Pi OS Lite (32-bit)** on a Pi 3 B+ (or newer). On a fresh boot:
+
 ```bash
-git clone <this-repo> bartender-kiosk
-cd bartender-kiosk
+sudo apt update && sudo apt install -y git
+git clone <this-repo> ~/bartender-kiosk
+cd ~/bartender-kiosk
+bash scripts/install-kiosk.sh
+sudo reboot
+```
+
+The install script installs the minimal X stack, Node 20, and Chromium; configures tty1 autologin; and registers a systemd service for the backend. After reboot, the Pi boots straight into a fullscreen Chromium kiosk pointed at the local backend.
+
+See `scripts/install-kiosk.sh` for details. Diagnostics:
+
+```bash
+systemctl status bartender-kiosk     # backend status
+journalctl -u bartender-kiosk -f     # backend logs
+```
+
+## Development
+
+On a desktop, run the backend by hand and open the page in a browser:
+
+```bash
 npm install
 npm run start
 ```
 
-Then launch Chromium in kiosk mode:
-
-```bash
-chromium-browser --kiosk --disable-gpu --noerrdialogs http://localhost:3000
-```
-
-For auto-start at boot, see the autostart snippet in `CLAUDE.md`.
-
-## Development
-
-On a desktop, the same commands work — just open `http://localhost:3000` in a browser window sized to 800×480 (or use Chrome DevTools device emulation).
+Then visit `http://localhost:3000` in a window sized to 800×480 (or use Chrome DevTools device emulation).
 
 ## Working with Claude Code
 

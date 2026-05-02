@@ -210,16 +210,28 @@ For now, `src/server/pour.js` exports `mockPour()` that emits the above progress
 
 ## Running on the Pi
 
+The target image is **Raspberry Pi OS Lite (32-bit)** on a Pi 3 B+. We don't run the full LXDE desktop — just `xinit` + Openbox + Chromium, to keep RAM headroom for the browser.
+
+First-time setup is automated by `scripts/install-kiosk.sh`:
+
 ```bash
 # On the Pi, after cloning:
-npm install        # installs backend deps
-npm run start      # starts backend + serves frontend
-chromium-browser --kiosk --disable-gpu http://localhost:3000
+bash scripts/install-kiosk.sh
+sudo reboot
 ```
 
-For kiosk mode at boot, add to `~/.config/lxsession/LXDE-pi/autostart`:
+The script installs the minimal X stack, Node 20, and Chromium; sets up tty1 autologin; writes `~/.bash_profile`, `~/.xinitrc`, and `~/.config/openbox/autostart`; and registers `bartender-kiosk.service` (systemd) to run the backend on boot. After reboot the Pi auto-logs in on tty1, starts X via Openbox, and Chromium launches in `--kiosk` mode against `http://localhost:3000`.
+
+For dev iteration on the Pi without the full kiosk flow, the backend can still be run by hand:
+
+```bash
+npm run start      # starts backend + serves frontend on :3000
 ```
-@chromium-browser --kiosk --disable-gpu --noerrdialogs --disable-infobars http://localhost:3000
+
+To diagnose the running kiosk:
+```bash
+systemctl status bartender-kiosk     # backend status
+journalctl -u bartender-kiosk -f     # backend logs
 ```
 
 ## What to build first (suggested order)
