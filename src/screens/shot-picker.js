@@ -3,6 +3,12 @@ import { shotIngredients, buildShotDrink } from "../drinks.js";
 import { header } from "../components/header.js";
 import { glass } from "../components/glass.js";
 import { ingredientName } from "../ingredients.js";
+import { loadInventory, remainingForIngredient } from "../inventory-store.js";
+
+// Smallest pour the shot-detail screen will let you commit to. Anything below
+// this is effectively "out" — the tile blocks the tap rather than dropping the
+// user into a screen that just disables the pour button.
+const MIN_POURABLE_OZ = 0.25;
 
 function shotTile(ing) {
   const tile = document.createElement("button");
@@ -28,13 +34,33 @@ function shotTile(ing) {
   name.textContent = displayName;
   const meta = document.createElement("div");
   meta.className = "shot-tile__meta";
-  meta.textContent = `${ing.defaultOz.toFixed(1)} oz default`;
+
+  // Stock state drives both the meta line and tappability. Unknown stock
+  // (Infinity, before first inventory load) defaults to "ok" so the picker
+  // doesn't flash everything as empty during boot.
+  const remaining = remainingForIngredient(ing.id);
+  const stockKnown = Number.isFinite(remaining);
+  const isOut = stockKnown && remaining < MIN_POURABLE_OZ;
+  const isLow = stockKnown && !isOut && remaining < ing.defaultOz;
+
+  if (isOut) {
+    tile.classList.add("is-unavailable");
+    tile.disabled = true;
+    meta.textContent = "Empty — refill to pour";
+  } else if (isLow) {
+    meta.textContent = `${remaining.toFixed(1)} oz left`;
+  } else {
+    meta.textContent = `${ing.defaultOz.toFixed(1)} oz default`;
+  }
+
   text.append(name, meta);
   tile.appendChild(text);
 
-  tile.addEventListener("click", () => {
-    navigate("shotDetail", { ingredientId: ing.id });
-  });
+  if (!isOut) {
+    tile.addEventListener("click", () => {
+      navigate("shotDetail", { ingredientId: ing.id });
+    });
+  }
 
   return tile;
 }
@@ -44,21 +70,35 @@ export function shotPicker() {
   element.className = "screen";
   element.dataset.screen = "shotPicker";
 
-  element.appendChild(
-    header({
-      onBack: () => navigate("category", {}, "pop"),
-      eyebrow: "Category 05",
-      eyebrowAccent: "var(--accent-shots)",
-      title: "The Shots",
-      search: true,
-      onSearch: () => navigate("search"),
-      right: { count: `${shotIngredients.length} spirits` },
-    })
-  );
-
+  const headerSlot = document.createElement("div");
   const grid = document.createElement("div");
   grid.className = "shot-grid";
-  for (const ing of shotIngredients) grid.appendChild(shotTile(ing));
+
+  function availableCount() {
+    return shotIngredients.filter((ing) => {
+      const r = remainingForIngredient(ing.id);
+      return !Number.isFinite(r) || r >= MIN_POURABLE_OZ;
+    }).length;
+  }
+
+  function render() {
+    headerSlot.innerHTML = "";
+    headerSlot.appendChild(
+      header({
+        onBack: () => navigate("category", {}, "pop"),
+        eyebrow: "Category 05",
+        eyebrowAccent: "var(--accent-shots)",
+        title: "The Shots",
+        search: true,
+        onSearch: () => navigate("search"),
+        right: { count: `${availableCount()} spirits` },
+      })
+    );
+    grid.innerHTML = "";
+    for (const ing of shotIngredients) grid.appendChild(shotTile(ing));
+  }
+
+  element.appendChild(headerSlot);
   element.appendChild(grid);
 
   const footer = document.createElement("footer");
@@ -72,5 +112,26 @@ export function shotPicker() {
   footer.append(meta, hint);
   element.appendChild(footer);
 
-  return { element, mount() {}, unmount() {} };
+  // Snapshot of remaining oz per spirit, so a no-op refresh after the inventory
+  // arrives doesn't trigger a re-render on a screen with no real changes.
+  function stockSignature() {
+    return shotIngredients
+      .map((ing) => `${ing.id}:${remainingForIngredient(ing.id)}`)
+      .join("|");
+  }
+
+  render();
+  return {
+    element,
+    mount() {
+      // Same race as detail/shot-detail: the post-pour inventory fetch may not
+      // have landed yet when the user lands here. Refresh and re-render if the
+      // signature changed so empty bottles surface immediately.
+      const before = stockSignature();
+      loadInventory().then(() => {
+        if (stockSignature() !== before) render();
+      });
+    },
+    unmount() {},
+  };
 }

@@ -1517,6 +1517,172 @@ button.admin-slot__level {
   border-color: color-mix(in srgb, var(--status-ready) 40%, var(--border-emphasis));
 }
 
+/* ---------- Admin / Dashboard ---------- */
+
+.admin-body--dashboard {
+  gap: 10px;
+  overflow-y: hidden;
+}
+
+.dash-status {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: auto auto 1fr 1fr 1fr;
+  align-items: center;
+  gap: 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  min-height: 52px;
+}
+.dash-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--status-ready);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-ready) 18%, transparent);
+}
+.dash-status.is-mock .dash-status__dot {
+  background: var(--accent-sours);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-sours) 18%, transparent);
+}
+.dash-status__mode {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.dash-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 1px solid var(--border-divider);
+  padding-left: 18px;
+}
+.dash-stat__value {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.dash-stat__label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.dash-row {
+  display: grid;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.dash-row--lists {
+  grid-template-columns: 1fr 1fr;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.dash-row--shortcuts {
+  grid-template-columns: 1fr 1fr;
+}
+
+.dash-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.dash-card__title {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.dash-card__empty {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.dash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+.dash-list__row {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  min-height: 24px;
+}
+.dash-list__rank {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  color: var(--text-quaternary);
+  font-variant-numeric: tabular-nums;
+}
+.dash-list__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-list__value {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.dash-card--shortcut {
+  appearance: none;
+  font-family: inherit;
+  text-align: left;
+  color: var(--text-primary);
+  position: relative;
+  padding-right: 36px;
+  cursor: inherit;
+  min-height: 76px;
+}
+.dash-shortcut__primary {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.dash-shortcut__secondary {
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-shortcut__arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 24px;
+  color: var(--text-tertiary);
+  line-height: 1;
+}
+
 /* ---------- Admin / Recipes ---------- */
 
 .admin-body--recipes { gap: 10px; }
@@ -2020,6 +2186,13 @@ button.admin-slot__level {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--text-tertiary);
+}
+
+/* Match drink-card.is-unavailable: .shot-tile's border shorthand sits later in
+   the cascade than the generic .is-unavailable rule, so without this override
+   the dashed border-style gets reset back to solid. */
+.shot-tile.is-unavailable {
+  border-style: dashed;
 }
 
 /* ---------- Shot detail (drag-to-fill glass) ---------- */

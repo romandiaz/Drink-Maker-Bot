@@ -8,6 +8,7 @@ import {
 import { header } from "../components/header.js";
 import { setPendingOrder } from "../state.js";
 import { ingredientName } from "../ingredients.js";
+import { loadInventory, remainingForIngredient } from "../inventory-store.js";
 
 const MIN_OZ = 0.25;
 const MAX_OZ = 3.0;
@@ -46,6 +47,11 @@ export function shotDetail(props = {}) {
   const displayName = ingredientName(ing.id);
   let volumeOz = ing.defaultOz;
   let userHasTouched = false;
+  // Upper bound on what the machine can dispense for this ingredient. Capped
+  // at MAX_OZ when stock is unknown or plentiful; drops to remaining oz when
+  // a slot is running low. Recomputed each render so an inventory refresh on
+  // mount can tighten the bound after the screen has already drawn.
+  let effectiveMax = MAX_OZ;
 
   const element = document.createElement("section");
   element.className = "screen";
@@ -168,6 +174,14 @@ export function shotDetail(props = {}) {
   fine.append(minus, fineLabel, plus);
   controls.appendChild(fine);
 
+  // Inline stock notice — surfaces "low" / "out" inventory states so a user
+  // tapping "Another" doesn't keep mashing pour against a near-empty bottle.
+  // Hidden when stock is plentiful so a normal pour stays uncluttered.
+  const stockNote = document.createElement("div");
+  stockNote.className = "detail-missing-banner";
+  stockNote.hidden = true;
+  controls.appendChild(stockNote);
+
   const pourBtn = document.createElement("button");
   pourBtn.type = "button";
   pourBtn.className = "pour-btn tappable";
@@ -192,13 +206,25 @@ export function shotDetail(props = {}) {
   }
 
   function setVolume(next, { fromUser = false } = {}) {
-    const v = snap(clamp(next, MIN_OZ, MAX_OZ));
+    // Clamp to effectiveMax (not MAX_OZ) so a near-empty bottle caps the
+    // slider/presets/drag at what the machine can actually deliver.
+    const upper = Math.max(MIN_OZ, effectiveMax);
+    const v = snap(clamp(next, MIN_OZ, upper));
     volumeOz = Number(v.toFixed(2));
     if (fromUser) userHasTouched = true;
     renderVolume();
   }
 
   function renderVolume() {
+    // Recompute the cap each render so a stock change (mount-time inventory
+    // refresh, or returning here after a pour drained the slot) tightens the
+    // controls without a separate code path.
+    const remaining = remainingForIngredient(ing.id);
+    effectiveMax = Number.isFinite(remaining) ? Math.min(MAX_OZ, remaining) : MAX_OZ;
+    if (volumeOz > effectiveMax) {
+      volumeOz = Math.max(MIN_OZ, snap(effectiveMax));
+    }
+
     const pct = (volumeOz / MAX_OZ) * 100;
     liquid.style.height = `${pct}%`;
     meniscus.style.bottom = `${pct}%`;
@@ -207,15 +233,39 @@ export function shotDetail(props = {}) {
 
     for (const p of presetButtons) {
       p.btn.classList.toggle("is-active", Math.abs(p.oz - volumeOz) < 1e-6);
+      // Presets above what's left are unreachable — disable them rather than
+      // silently clamping on tap, so the user understands why.
+      p.btn.disabled = p.oz > effectiveMax + 1e-6;
     }
     minus.disabled = volumeOz <= MIN_OZ + 1e-6;
-    plus.disabled = volumeOz >= MAX_OZ - 1e-6;
+    plus.disabled = volumeOz >= effectiveMax - 1e-6;
 
     hint.classList.toggle("is-hidden", userHasTouched);
 
-    const preview = buildShotDrink(ing.id, volumeOz, displayName);
-    const seconds = estimatePourSeconds(preview, "regular", 1.0);
-    pourBtn.textContent = `Pour · Ready in ~${seconds}s`;
+    // Stock notice: only show when the cap is actually limiting (remaining is
+    // finite *and* below the normal max). Empty bottle → block the pour.
+    const stockKnown = Number.isFinite(remaining);
+    const outOfStock = stockKnown && effectiveMax < MIN_OZ;
+    const stockTight = stockKnown && remaining < MAX_OZ;
+    if (outOfStock) {
+      stockNote.hidden = false;
+      stockNote.textContent = `${displayName} is empty — refill to pour.`;
+    } else if (stockTight) {
+      stockNote.hidden = false;
+      stockNote.textContent = `${remaining.toFixed(1)} oz of ${displayName} left in the slot.`;
+    } else {
+      stockNote.hidden = true;
+      stockNote.textContent = "";
+    }
+
+    pourBtn.disabled = outOfStock;
+    if (outOfStock) {
+      pourBtn.textContent = "Refill to pour";
+    } else {
+      const preview = buildShotDrink(ing.id, volumeOz, displayName);
+      const seconds = estimatePourSeconds(preview, "regular", 1.0);
+      pourBtn.textContent = `Pour · Ready in ~${seconds}s`;
+    }
   }
 
   // Drag-to-fill: any pointer gesture inside the stage sets the liquid level
@@ -224,6 +274,9 @@ export function shotDetail(props = {}) {
   let dragging = false;
 
   function volumeFromEvent(e) {
+    // Drag axis is calibrated to MAX_OZ so the tick marks stay positionally
+    // honest — setVolume() then clamps the result to effectiveMax, so a near-
+    // empty bottle stops the liquid at the cap rather than the glass top.
     const rect = stage.getBoundingClientRect();
     const y = e.clientY - rect.top;
     const pct = 1 - clamp(y / rect.height, 0, 1);
@@ -249,5 +302,18 @@ export function shotDetail(props = {}) {
   stage.addEventListener("pointercancel", onPointerUp);
 
   renderVolume();
-  return { element, mount() {}, unmount() {} };
+  return {
+    element,
+    mount() {
+      // Arriving via "Another" right after a pour completes means the inventory
+      // cache may be one fetch behind the consume() that just ran — refresh and
+      // re-render so the cap, stock note, and disabled state reflect what's
+      // actually in the bottle.
+      const before = remainingForIngredient(ing.id);
+      loadInventory().then(() => {
+        if (remainingForIngredient(ing.id) !== before) renderVolume();
+      });
+    },
+    unmount() {},
+  };
 }

@@ -10,13 +10,13 @@
       "slot": 2,
       "ingredientId": "vodka",
       "capacityOz": 33,
-      "remainingOz": 13.5
+      "remainingOz": 12.5
     },
     {
       "slot": 3,
       "ingredientId": "whiskey",
       "capacityOz": 33,
-      "remainingOz": 27.5
+      "remainingOz": 25.5
     },
     {
       "slot": 4,
@@ -58,7 +58,7 @@
       "slot": 10,
       "ingredientId": "simple-syrup",
       "capacityOz": 25,
-      "remainingOz": 21.1
+      "remainingOz": 20.6
     },
     {
       "slot": 11,
@@ -76,7 +76,7 @@
       "slot": 13,
       "ingredientId": "lemon-juice",
       "capacityOz": 25,
-      "remainingOz": 23.7
+      "remainingOz": 22.9
     },
     {
       "slot": 14,
@@ -97,5 +97,5 @@
       "remainingOz": 18.2
     }
   ],
-  "updatedAt": "2026-05-01T19:51:49.103Z"
+  "updatedAt": "2026-05-02T19:21:24.071Z"
 }

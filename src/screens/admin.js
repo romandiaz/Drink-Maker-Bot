@@ -1,15 +1,19 @@
 import { navigate } from "../app.js";
 import { header } from "../components/header.js";
+import { adminDashboardView } from "./admin-dashboard.js";
 import { adminInventoryView } from "./admin-inventory.js";
 import { adminRecipesView } from "./admin-recipes.js";
 
 // Tab shell for the admin area. Holds a fixed header, a tab switcher, the
 // active view's body, and a shared footer. Views own their own data fetching
 // and render into a body element; mount/unmount cycle through the shell.
+// `hint` is the right-aligned footer string; the dashboard has nothing to
+// save, so the autosave promise only shows on the editing tabs.
 
 const TABS = [
-  { id: "inventory", label: "Inventory", factory: adminInventoryView },
-  { id: "recipes", label: "Recipes", factory: adminRecipesView },
+  { id: "dashboard", label: "Dashboard", factory: adminDashboardView, hint: "Tap a card for details" },
+  { id: "inventory", label: "Inventory", factory: adminInventoryView, hint: "Changes save automatically" },
+  { id: "recipes", label: "Recipes", factory: adminRecipesView, hint: "Changes save automatically" },
 ];
 
 export function admin() {
@@ -41,7 +45,6 @@ export function admin() {
   meta.className = "screen-footer__meta";
   const hint = document.createElement("span");
   hint.className = "screen-footer__hint";
-  hint.textContent = "Changes save automatically";
   footer.append(meta, hint);
   element.appendChild(footer);
 
@@ -61,7 +64,8 @@ export function admin() {
     renderTabs();
 
     const tab = TABS.find((t) => t.id === id);
-    activeView = tab.factory({ host: element, setMeta });
+    hint.textContent = tab.hint || "";
+    activeView = tab.factory({ host: element, setMeta, onSwitchTab: switchTab });
     viewHost.appendChild(activeView.element);
     activeView.mount?.();
   }
@@ -80,7 +84,7 @@ export function admin() {
   }
 
   function mount() {
-    switchTab("inventory");
+    switchTab("dashboard");
   }
 
   function unmount() {

@@ -4,6 +4,7 @@ import {
   totalVolumeOz,
 } from "../drinks.js";
 import { consume } from "./inventory.js";
+import { record as recordPour } from "./pour-history.js";
 
 // Mock pour speed multiplier: 1 = realistic time, higher = faster for dev iteration.
 // Real serial/GPIO control replaces this later.
@@ -54,6 +55,11 @@ export function mockPour(order, send) {
       // Inventory is consumed only on successful completion — a cancelled
       // pour leaves the physical state ambiguous, so we don't half-decrement.
       consume(ingredients).catch(() => {});
+      recordPour({
+        drinkId: drink.id,
+        drinkName: drink.name,
+        ingredients,
+      }).catch(() => {});
       send({ type: "POUR_COMPLETE", drinkId: drink.id });
       return;
     }

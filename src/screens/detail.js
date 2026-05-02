@@ -11,7 +11,7 @@ import { header } from "../components/header.js";
 import { glass } from "../components/glass.js";
 import { segmented } from "../components/editor-fields.js";
 import { appState, setPendingOrder, setSelectedDrink } from "../state.js";
-import { isPrimaryLoaded, missingIngredients } from "../inventory-store.js";
+import { loadInventory, recipeShortfalls } from "../inventory-store.js";
 import { ingredientName } from "../ingredients.js";
 import {
   formatByHand,
@@ -227,18 +227,23 @@ export function detail(props = {}) {
     ingredientsList.className = "detail-ingredients-list";
 
     const adjusted = adjustedIngredients(drink, order.strength, order.amount);
-    const missing = missingIngredients(drink);
-    const missingSet = new Set(missing);
+    // Shortfalls compare *adjusted* volumes against current stock, so a "strong"
+    // pour that would empty the bottle gets caught alongside a slot the admin
+    // never loaded. Both flow into the same by-hand path below.
+    const shortfalls = recipeShortfalls(adjusted);
+    const shortfallByName = new Map(shortfalls.map((s) => [s.name, s]));
+    const primaryName = drink.ingredients[0]?.name;
+    const primaryShort = primaryName ? shortfallByName.get(primaryName) : null;
 
     adjusted.forEach((ing, index) => {
-      const isMissing = missingSet.has(ing.name);
+      const isShort = shortfallByName.has(ing.name);
       ingredientsList.appendChild(
         ingredientLine(
           `${ing.volumeOz} oz ${formatIngredient(ing.name)}`,
-          // Missing ingredients get the outline-dot treatment so they read the
-          // same as the existing garnish/topUp lines below — anything outlined
-          // is "you'll add this", not "machine pours this".
-          isMissing
+          // Shortfall ingredients get the outline-dot treatment so they read
+          // the same as the existing garnish/topUp lines below — anything
+          // outlined is "you'll add this", not "machine pours this".
+          isShort
             ? { outline: true }
             : { accent: DONUT_COLORS[index % DONUT_COLORS.length] }
         )
@@ -285,7 +290,7 @@ export function detail(props = {}) {
       )
     );
 
-    if (missing.length === 0) {
+    if (shortfalls.length === 0) {
       const seconds = estimatePourSeconds(drink, order.strength, order.amount);
       right.appendChild(
         pourButton({
@@ -301,20 +306,20 @@ export function detail(props = {}) {
           },
         })
       );
-    } else if (isPrimaryLoaded(drink)) {
-      // Primary is loaded — user can complete the recipe by hand. Snapshot
+    } else if (!primaryShort) {
+      // Primary is available — user can complete the recipe by hand. Snapshot
       // the by-hand list with strength/amount-adjusted volumes onto the
       // pending order so the pouring + complete screens get the right amounts.
-      const byHand = adjusted.filter((ing) => missingSet.has(ing.name));
+      const byHand = adjusted.filter((ing) => shortfallByName.has(ing.name));
       const banner = document.createElement("div");
       banner.className = "detail-missing-banner detail-missing-banner--byhand";
       banner.textContent = `Add by hand after pour: ${joinList(byHand.map(formatByHand))}`;
       right.appendChild(banner);
 
       // The machine-pour time is shorter than the recipe's full time because
-      // missing volume isn't pumped — recompute so the label is honest.
+      // shortfall volume isn't pumped — recompute so the label is honest.
       const pouredVolume = adjusted
-        .filter((ing) => !missingSet.has(ing.name))
+        .filter((ing) => !shortfallByName.has(ing.name))
         .reduce((s, i) => s + i.volumeOz, 0);
       const seconds = Math.round(15 + pouredVolume * 4.0);
       right.appendChild(
@@ -329,9 +334,19 @@ export function detail(props = {}) {
         })
       );
     } else {
+      // Primary itself is short — the recipe is structurally blocked. Distinguish
+      // "no slot at all" (admin needs to load a bottle) from "slot empty / low"
+      // (admin needs to refill) so the prompt is actionable.
+      const reasonLabel = (s) => {
+        const name = ingredientName(s.name);
+        if (s.reason === "missing") return `${name} (not loaded)`;
+        if (s.reason === "empty") return `${name} (out)`;
+        return `${name} (low — ${s.remainingOz.toFixed(1)} oz left)`;
+      };
+      const allMissing = shortfalls.every((s) => s.reason === "missing");
       const banner = document.createElement("div");
       banner.className = "detail-missing-banner";
-      banner.textContent = `Missing: ${missing.map(ingredientName).join(", ")}`;
+      banner.textContent = `${allMissing ? "Missing" : "Refill needed"}: ${shortfalls.map(reasonLabel).join(", ")}`;
       right.appendChild(banner);
 
       const disabled = document.createElement("button");
@@ -339,7 +354,9 @@ export function detail(props = {}) {
       disabled.className = "pour-btn pour-btn--disabled";
       disabled.disabled = true;
       disabled.style.setProperty("--accent", cat.accent);
-      disabled.textContent = "Load missing ingredients to pour";
+      disabled.textContent = allMissing
+        ? "Load missing ingredients to pour"
+        : "Refill ingredients to pour";
       right.appendChild(disabled);
     }
 
@@ -347,6 +364,29 @@ export function detail(props = {}) {
     element.appendChild(main);
   }
 
+  // Snapshot of which ingredients are short, so a no-op refresh doesn't trigger
+  // a re-render that would interrupt a slider drag in progress.
+  function shortfallSignature() {
+    const adjusted = adjustedIngredients(drink, order.strength, order.amount);
+    return recipeShortfalls(adjusted)
+      .map((s) => `${s.name}:${s.reason}`)
+      .sort()
+      .join("|");
+  }
+
   render();
-  return { element, mount() {}, unmount() {} };
+  return {
+    element,
+    mount() {
+      // Arriving via "Another" right after a pour completes means the inventory
+      // cache may be one fetch behind the consume() that just ran — refresh and
+      // re-render if availability shifted, so a now-empty bottle surfaces as
+      // by-hand instead of being silently mispoured.
+      const before = shortfallSignature();
+      loadInventory().then(() => {
+        if (shortfallSignature() !== before) render();
+      });
+    },
+    unmount() {},
+  };
 }

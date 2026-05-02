@@ -5,12 +5,20 @@ import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { mockPour } from "./pour.js";
+import { serialPour } from "./serialPour.js";
+import { openSerial } from "./serial.js";
 import { loadInventory, saveInventory } from "./inventory.js";
 import * as drinksStore from "./drinks-store.js";
+import { stats as pourStats } from "./pour-history.js";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC_DIR = resolve(__dirname, "..");
+
+// Default to mockPour; flipped to serialPour below if SERIAL_PORT is set.
+// Declared up here so the wss handler closure references the same binding
+// without any temporal-dead-zone fragility.
+let pour = mockPour;
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -104,6 +112,11 @@ async function handleApi(req, res, urlPath) {
     return true;
   }
 
+  if (urlPath === "/api/stats" && req.method === "GET") {
+    sendJson(res, 200, await pourStats());
+    return true;
+  }
+
   return false;
 }
 
@@ -149,7 +162,7 @@ wss.on("connection", (ws) => {
     }
     if (msg.type === "POUR") {
       if (cancelPour) cancelPour();
-      cancelPour = mockPour(msg, (event) => {
+      cancelPour = pour(msg, (event) => {
         if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(event));
       });
     } else if (msg.type === "POUR_CANCEL") {
@@ -170,6 +183,16 @@ wss.on("connection", (ws) => {
 // accepting pour requests — otherwise a freshly-started server would fall
 // back to SEED_DRINKS until the first /api/drinks fetch arrives.
 await drinksStore.load();
+
+// SERIAL_PORT=COM3 (Windows) or /dev/ttyUSB0 (Pi) flips us into real-pour
+// mode. Without it, mockPour keeps laptop dev fully functional.
+if (process.env.SERIAL_PORT) {
+  await openSerial(process.env.SERIAL_PORT);
+  pour = serialPour;
+  console.log(`Serial pour enabled on ${process.env.SERIAL_PORT}`);
+} else {
+  console.log("Mock pour enabled (set SERIAL_PORT to use real hardware)");
+}
 
 server.listen(PORT, () => {
   console.log(`Bartender kiosk running at http://localhost:${PORT}`);
