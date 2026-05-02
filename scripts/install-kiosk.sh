@@ -46,7 +46,7 @@ Changes:
   - apt update + install X, openbox, chromium-browser, unclutter, node 20
   - add $KIOSK_USER to dialout (serial access)
   - npm install in repo
-  - systemd service: bartender-kiosk.service (backend)
+  - systemd service: bartender-kiosk.service (backend; auto-detects Arduino)
   - console autologin on tty1
   - write ~/.bash_profile, ~/.xinitrc, ~/.config/openbox/autostart
   - disable screen blanking
@@ -125,10 +125,73 @@ fi
 echo "==> Running npm install in $REPO_DIR..."
 ( cd "$REPO_DIR" && npm install --omit=dev )
 
+# ---------- detect Arduino serial port -----------------------------------
+#
+# If a USB serial device is plugged in we bake SERIAL_PORT=<path> into the
+# systemd unit so the backend uses real hardware instead of mockPour.
+# With nothing connected we leave the env var unset and the backend stays
+# in mock mode. Pre-set SERIAL_PORT in the script's environment to skip
+# detection (handy for unattended re-installs).
+
+echo "==> Detecting Arduino serial port..."
+DETECTED_SERIAL_PORT=""
+
+if [[ -n "${SERIAL_PORT:-}" ]]; then
+  echo "    SERIAL_PORT preset in environment: $SERIAL_PORT"
+  DETECTED_SERIAL_PORT="$SERIAL_PORT"
+else
+  serial_candidates=()
+  for dev in /dev/ttyACM* /dev/ttyUSB*; do
+    [[ -e "$dev" ]] && serial_candidates+=("$dev")
+  done
+
+  case ${#serial_candidates[@]} in
+    0)
+      echo "    No serial device found at /dev/ttyACM* or /dev/ttyUSB*."
+      read -r -p "    Enter a path manually, or blank to skip (mock mode): " manual
+      DETECTED_SERIAL_PORT="$manual"
+      ;;
+    1)
+      DETECTED_SERIAL_PORT="${serial_candidates[0]}"
+      echo "    Found: $DETECTED_SERIAL_PORT"
+      ;;
+    *)
+      echo "    Multiple serial devices found:"
+      i=1
+      for c in "${serial_candidates[@]}"; do
+        echo "      $i) $c"
+        ((i++))
+      done
+      echo "      s) skip (mock mode)"
+      while true; do
+        read -r -p "    Pick [1-${#serial_candidates[@]} or s]: " pick
+        if [[ "$pick" =~ ^[Ss]$ ]]; then
+          DETECTED_SERIAL_PORT=""; break
+        elif [[ "$pick" =~ ^[0-9]+$ ]] && (( pick >= 1 && pick <= ${#serial_candidates[@]} )); then
+          DETECTED_SERIAL_PORT="${serial_candidates[$((pick-1))]}"; break
+        else
+          echo "    Invalid choice."
+        fi
+      done
+      ;;
+  esac
+fi
+
+if [[ -n "$DETECTED_SERIAL_PORT" ]]; then
+  echo "    Backend will use real hardware on $DETECTED_SERIAL_PORT"
+else
+  echo "    Backend will run in mock mode (no serial port set)"
+fi
+
 # ---------- systemd service for the backend ------------------------------
 
 echo "==> Installing bartender-kiosk.service..."
 NODE_BIN="$(command -v node)"
+SERIAL_ENV_LINE=""
+if [[ -n "$DETECTED_SERIAL_PORT" ]]; then
+  SERIAL_ENV_LINE="Environment=SERIAL_PORT=$DETECTED_SERIAL_PORT"
+fi
+
 sudo tee /etc/systemd/system/bartender-kiosk.service >/dev/null <<EOF
 [Unit]
 Description=Bartender Kiosk backend
@@ -142,6 +205,7 @@ ExecStart=$NODE_BIN src/server/index.js
 Restart=on-failure
 RestartSec=3
 Environment=NODE_ENV=production
+$SERIAL_ENV_LINE
 
 [Install]
 WantedBy=multi-user.target
