@@ -59,12 +59,25 @@ read -r -p "Continue? [y/N] " reply
 
 echo "==> Updating apt and installing packages..."
 sudo apt-get update
+
+# Pi OS Bookworm shipped `chromium-browser`; Trixie renamed it to `chromium`
+# (and the binary too). Pick whichever is available.
+if apt-cache show chromium-browser >/dev/null 2>&1; then
+  CHROMIUM_PKG=chromium-browser
+elif apt-cache show chromium >/dev/null 2>&1; then
+  CHROMIUM_PKG=chromium
+else
+  echo "Neither chromium-browser nor chromium is available in apt." >&2
+  exit 1
+fi
+echo "    using chromium package: $CHROMIUM_PKG"
+
 sudo apt-get install -y \
   xserver-xorg \
   xinit \
   x11-xserver-utils \
   openbox \
-  chromium-browser \
+  "$CHROMIUM_PKG" \
   unclutter \
   git \
   curl \
@@ -192,6 +205,13 @@ xset -dpms
 # Hide the cursor (touchscreen).
 unclutter -idle 0 -root &
 
+# Bookworm calls it chromium-browser; Trixie calls it chromium.
+if command -v chromium-browser >/dev/null; then
+  CHROMIUM=chromium-browser
+else
+  CHROMIUM=chromium
+fi
+
 # Wait for the backend to be reachable, then launch Chromium in kiosk mode.
 # The systemd unit starts the backend in parallel; this loop just avoids a
 # brief "site can't be reached" flash on cold boot.
@@ -199,7 +219,7 @@ until curl -sf http://localhost:3000 >/dev/null; do
   sleep 0.5
 done
 
-chromium-browser \
+"$CHROMIUM" \
   --kiosk \
   --noerrdialogs \
   --disable-infobars \
