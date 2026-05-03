@@ -14,6 +14,9 @@ const state = {
   // just "is the slot non-empty?", so a near-empty bottle gets caught before
   // the machine tries to dispense more than it has.
   remainingByIngredient: new Map(),
+  // ingredient ID → first slot holding it. Used by calibration lookups so
+  // pour-time estimates can pick a per-slot flow rate.
+  slotByIngredient: new Map(),
   slotCount: 0,
   loaded: false,
 };
@@ -31,14 +34,19 @@ export async function loadInventory() {
       slots.filter((s) => s.ingredientId).map((s) => s.ingredientId)
     );
     const remaining = new Map();
+    const slotByIngredient = new Map();
     for (const s of slots) {
       if (!s.ingredientId) continue;
       remaining.set(
         s.ingredientId,
         (remaining.get(s.ingredientId) ?? 0) + (Number(s.remainingOz) || 0)
       );
+      if (!slotByIngredient.has(s.ingredientId)) {
+        slotByIngredient.set(s.ingredientId, s.slot);
+      }
     }
     state.remainingByIngredient = remaining;
+    state.slotByIngredient = slotByIngredient;
     state.slotCount = slots.length;
     state.loaded = true;
   } catch {
@@ -122,4 +130,9 @@ export function loadedIngredientCount() {
 
 export function slotCount() {
   return state.slotCount;
+}
+
+// First slot (1-based) currently holding the given ingredient, or undefined.
+export function slotForIngredient(ingredientId) {
+  return state.slotByIngredient.get(ingredientId);
 }

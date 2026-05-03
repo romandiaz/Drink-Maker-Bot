@@ -185,6 +185,14 @@ If real photography isn't immediately feasible, the interim SVG system used duri
 ### Pagination dots (drink list footer)
 Four small horizontal bars — the active one is 20px wide in the category's accent color, the others are 8px wide at 15% white opacity. Tapping a dot jumps to that category.
 
+### Toast banner (error / status feedback)
+A single shared banner pinned to the bottom-center, 60px from the bottom edge so it clears the pour-cancel button and any footer hints. Surface background `#141414` with a 1px subtle border and a 3px left accent bar that signals variant — `--accent-shots` (coral) for errors, `--text-secondary` (muted gray) for neutral status. 13px regular text, single-line preferred but wraps to two if needed (max-width 540px). Fades in over 200ms, auto-dismisses after 4s, dismissible early by tap.
+
+Only one toast is ever visible — a new call replaces the current one rather than queuing, since stacked failures are confusing and the latest is almost always the most relevant. A toast is the right surface for **after-the-fact failures the user couldn't have prevented** (pour failed, save failed, hardware fault). It is **not** for in-flow validation (use inline errors) and **not** for connection loss (the dedicated reconnect overlay at z:100 sits above the toast and takes priority).
+
+### WebSocket reconnect overlay
+Full-screen 92%-opacity scrim with a centered pulsing dot and "RECONNECTING" label, shown only after the first successful connect drops — never on initial page load against a static dev server. Blocks all interaction until the backend returns. This is intentionally heavier than a toast because the kiosk is genuinely non-functional without the backend.
+
 ## Interaction principles
 
 - **Every action is one tap.** No long-press, no double-tap, no multi-touch gestures. Users may be holding a glass.
@@ -193,6 +201,7 @@ Four small horizontal bars — the active one is 20px wide in the category's acc
 - **Always provide escape.** Every screen after the category screen has a visible back button.
 - **Live, not modal.** Search results update as the user types. No "submit" button.
 - **Status is always visible.** The "READY" indicator in the top-right persists across screens so users know the machine is operational.
+- **Failures are never silent.** Every backend error (failed pour, hardware fault, save failure) surfaces as a toast banner with a plain-language message — e.g. "Out of gin" or "No vermouth loaded — check inventory". A swallowed `catch {}` is a bug, not a polish item.
 
 ## Screens still to design
 

@@ -10,6 +10,16 @@ import { openSerial } from "./serial.js";
 import { loadInventory, saveInventory } from "./inventory.js";
 import * as drinksStore from "./drinks-store.js";
 import { stats as pourStats } from "./pour-history.js";
+import {
+  loadCalibration,
+  saveCalibration,
+  clearSlotRate,
+} from "./calibration.js";
+import {
+  runTimedPump,
+  runCalibrationPour,
+  recordCalibrationResult,
+} from "./maintenance.js";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -114,6 +124,78 @@ async function handleApi(req, res, urlPath) {
 
   if (urlPath === "/api/stats" && req.method === "GET") {
     sendJson(res, 200, await pourStats());
+    return true;
+  }
+
+  if (urlPath === "/api/calibration" && req.method === "GET") {
+    sendJson(res, 200, await loadCalibration());
+    return true;
+  }
+  if (urlPath === "/api/calibration" && req.method === "PUT") {
+    try {
+      const body = await readJsonBody(req);
+      sendJson(res, 200, await saveCalibration(body));
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
+  const calSlotMatch = urlPath.match(/^\/api\/calibration\/slot\/(\d+)$/);
+  if (calSlotMatch && req.method === "DELETE") {
+    try {
+      sendJson(res, 200, await clearSlotRate(Number(calSlotMatch[1])));
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
+
+  if (urlPath === "/api/maintenance/run" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const slot = Number(body.slot);
+      const durationSec = Number(body.durationSec);
+      const mode = body.mode === "clean" ? "clean" : "prime";
+      if (!Number.isInteger(slot) || slot < 1) throw new Error("invalid slot");
+      if (!Number.isFinite(durationSec) || durationSec <= 0 || durationSec > 60) {
+        throw new Error("invalid duration");
+      }
+      await runTimedPump(slot, durationSec * 1000);
+      sendJson(res, 200, { ok: true, mode, slot, durationSec });
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
+
+  if (urlPath === "/api/maintenance/calibrate-pour" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const slot = Number(body.slot);
+      const targetOz = Number(body.targetOz);
+      if (!Number.isInteger(slot) || slot < 1) throw new Error("invalid slot");
+      if (!Number.isFinite(targetOz) || targetOz <= 0 || targetOz > 8) {
+        throw new Error("invalid target");
+      }
+      await runCalibrationPour(slot, targetOz);
+      sendJson(res, 200, { ok: true, slot, targetOz });
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
+
+  if (urlPath === "/api/maintenance/calibrate-record" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const slot = Number(body.slot);
+      const targetOz = Number(body.targetOz);
+      const actualOz = Number(body.actualOz);
+      if (!Number.isInteger(slot) || slot < 1) throw new Error("invalid slot");
+      sendJson(res, 200, await recordCalibrationResult(slot, targetOz, actualOz));
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
     return true;
   }
 

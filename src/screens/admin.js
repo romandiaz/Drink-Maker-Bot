@@ -3,6 +3,7 @@ import { header } from "../components/header.js";
 import { adminDashboardView } from "./admin-dashboard.js";
 import { adminInventoryView } from "./admin-inventory.js";
 import { adminRecipesView } from "./admin-recipes.js";
+import { adminMaintenanceView } from "./admin-maintenance.js";
 
 // Tab shell for the admin area. Holds a fixed header, a tab switcher, the
 // active view's body, and a shared footer. Views own their own data fetching
@@ -14,6 +15,7 @@ const TABS = [
   { id: "dashboard", label: "Dashboard", factory: adminDashboardView, hint: "Tap a card for details" },
   { id: "inventory", label: "Inventory", factory: adminInventoryView, hint: "Changes save automatically" },
   { id: "recipes", label: "Recipes", factory: adminRecipesView, hint: "Changes save automatically" },
+  { id: "maintenance", label: "Maintenance", factory: adminMaintenanceView, hint: "Routines run on the live machine" },
 ];
 
 export function admin() {

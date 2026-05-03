@@ -9,6 +9,10 @@ import { header } from "../components/header.js";
 import { setPendingOrder } from "../state.js";
 import { ingredientName } from "../ingredients.js";
 import { loadInventory, remainingForIngredient } from "../inventory-store.js";
+import {
+  defaultFlowOzPerSec,
+  flowRateForIngredient,
+} from "../calibration-store.js";
 
 const MIN_OZ = 0.25;
 const MAX_OZ = 3.0;
@@ -263,7 +267,10 @@ export function shotDetail(props = {}) {
       pourBtn.textContent = "Refill to pour";
     } else {
       const preview = buildShotDrink(ing.id, volumeOz, displayName);
-      const seconds = estimatePourSeconds(preview, "regular", 1.0);
+      const seconds = estimatePourSeconds(preview, "regular", 1.0, {
+        flowRateForIngredient,
+        defaultFlowOzPerSec: defaultFlowOzPerSec(),
+      });
       pourBtn.textContent = `Pour · Ready in ~${seconds}s`;
     }
   }

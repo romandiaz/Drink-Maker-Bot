@@ -12,6 +12,10 @@ import { glass } from "../components/glass.js";
 import { segmented } from "../components/editor-fields.js";
 import { appState, setPendingOrder, setSelectedDrink } from "../state.js";
 import { loadInventory, recipeShortfalls } from "../inventory-store.js";
+import {
+  defaultFlowOzPerSec,
+  flowRateForIngredient,
+} from "../calibration-store.js";
 import { ingredientName } from "../ingredients.js";
 import {
   formatByHand,
@@ -291,7 +295,10 @@ export function detail(props = {}) {
     );
 
     if (shortfalls.length === 0) {
-      const seconds = estimatePourSeconds(drink, order.strength, order.amount);
+      const seconds = estimatePourSeconds(drink, order.strength, order.amount, {
+        flowRateForIngredient,
+        defaultFlowOzPerSec: defaultFlowOzPerSec(),
+      });
       right.appendChild(
         pourButton({
           accent: cat.accent,

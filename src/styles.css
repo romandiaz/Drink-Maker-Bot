@@ -2116,6 +2116,47 @@ button.admin-slot__level {
   color: var(--text-secondary);
 }
 
+/* ---------- Toast banner ---------- */
+
+/* Bottom-centered, above any screen footer. The pour cancel button bottom-aligns
+   to ~24px so the toast clears it at 60px. z-index sits above screens but below
+   the WS reconnect overlay (z:100), since reconnect is the more critical state. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 60px;
+  transform: translate(-50%, 12px);
+  min-width: 240px;
+  max-width: 540px;
+  padding: 12px 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-emphasis);
+  border-radius: var(--radius-lg);
+  border-left-width: 3px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+  z-index: 90;
+}
+.toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: all;
+}
+.toast[data-variant="error"] {
+  border-left-color: var(--accent-shots);
+}
+.toast[data-variant="info"] {
+  border-left-color: var(--text-secondary);
+}
+.toast__label {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
+  text-align: center;
+  line-height: 1.3;
+}
+
 /* ---------- Shot picker (spirit grid) ---------- */
 
 .shot-grid {
@@ -2487,6 +2528,197 @@ button.admin-slot__level {
   background: var(--status-ready);
   border: 1px solid var(--status-ready);
   color: var(--bg-primary);
+}
+
+/* ---------- Admin / Maintenance ---------- */
+
+.admin-body--maintenance {
+  gap: 8px;
+}
+.admin-body--maintenance.is-busy {
+  pointer-events: auto;
+  cursor: progress;
+}
+
+.maint-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.maint-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.maint-section-head__title {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.maint-section-head__sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+
+.maint-quick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.maint-note {
+  margin: 0;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
+.maint-btn {
+  appearance: none;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-emphasis);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 0 14px;
+  min-height: 36px;
+  white-space: nowrap;
+}
+.maint-btn:disabled {
+  opacity: 0.35;
+}
+.maint-btn--primary {
+  border-color: var(--status-ready);
+  color: var(--status-ready);
+}
+.maint-btn--warn {
+  border-color: color-mix(in srgb, var(--accent-sours) 60%, var(--border-emphasis));
+  color: var(--accent-sours);
+}
+
+.maint-slot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.maint-slot {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  min-height: 44px;
+}
+.maint-slot.is-empty {
+  opacity: 0.5;
+}
+.maint-slot__num {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.maint-slot__info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.maint-slot__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.maint-slot__meta {
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+.maint-slot__rate {
+  font-variant-numeric: tabular-nums;
+  color: var(--status-ready);
+}
+.maint-slot__rate.is-default {
+  color: var(--text-tertiary);
+}
+.maint-slot__actions {
+  display: flex;
+  gap: 6px;
+}
+.maint-slot__actions .maint-btn {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  padding: 0 10px;
+  min-height: 32px;
+}
+
+.maint-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.maint-meta__label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+.maint-meta__value {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Calibration modal */
+.maint-cal__panel {
+  width: 540px;
+  max-height: 400px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-emphasis);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.maint-cal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: stretch;
+}
+.maint-cal__copy {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.maint-cal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* ---------- Reduced motion ---------- */

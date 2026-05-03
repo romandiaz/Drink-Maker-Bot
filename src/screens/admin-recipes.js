@@ -3,6 +3,7 @@ import { drinkEditor } from "../components/drink-editor.js";
 import { glass } from "../components/glass.js";
 import { reloadDrinks } from "../app.js";
 import { postJSON, putJSON, delJSON } from "../api.js";
+import { showToast } from "../components/toast.js";
 
 // Recipes view for the admin tab shell. Lists drinks grouped by category and
 // lets admins add / edit / delete. CRUD hits /api/drinks and calls
@@ -98,6 +99,7 @@ export function adminRecipesView({ host, setMeta }) {
         } catch (e) {
           console.error(e);
           setMeta(`Save failed — ${e.message}`);
+          showToast(`Save failed — ${e.message}`);
         }
       },
       onDelete: drink
@@ -111,6 +113,7 @@ export function adminRecipesView({ host, setMeta }) {
             } catch (e) {
               console.error(e);
               setMeta(`Delete failed — ${e.message}`);
+              showToast(`Delete failed — ${e.message}`);
             }
           }
         : null,

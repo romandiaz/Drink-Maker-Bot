@@ -2,9 +2,12 @@ import {
   adjustedIngredients,
   getDrinkById,
   totalVolumeOz,
+  estimatePourBodySeconds,
+  POUR_SETUP_SECONDS,
 } from "../drinks.js";
-import { consume } from "./inventory.js";
+import { consume, loadInventory } from "./inventory.js";
 import { record as recordPour } from "./pour-history.js";
+import { loadCalibration, flowRateForSlot } from "./calibration.js";
 
 // Mock pour speed multiplier: 1 = realistic time, higher = faster for dev iteration.
 // Real serial/GPIO control replaces this later.
@@ -29,14 +32,15 @@ export function mockPour(order, send) {
     (i) => !skip.has(i.name)
   );
   const totalVolume = totalVolumeOz(ingredients);
-  // Inlined to match the filtered list (estimatePourSeconds would re-include
-  // skipped volume via the full recipe).
-  const totalSeconds = (15 + totalVolume * 4.0) / SPEED_MULT;
 
   let cancelled = false;
   let timer = null;
   let stepIndex = 0;
   let cumulativeVolume = 0;
+  // Resolved during the async warmup: per-ingredient flow rate map keyed by
+  // ingredient ID, sourced from the slot calibration. Defaults are applied
+  // inside estimatePourBodySeconds when a slot has no measurement.
+  let totalSeconds = 0;
 
   function clearTimer() {
     if (timer) {
@@ -103,7 +107,36 @@ export function mockPour(order, send) {
     timer = setTimeout(tick, tickInterval);
   }
 
-  startStep();
+  // Resolve calibration + slot mapping before the first step fires. mockPour
+  // is normally a sync return so the caller can stash a cancel handle, but
+  // the timing math now needs async data — kick off the timers in a then().
+  Promise.all([loadCalibration(), loadInventory()])
+    .then(([cal, inv]) => {
+      if (cancelled) return;
+      const slotByIngredient = new Map();
+      for (const s of inv.slots) {
+        if (s.ingredientId && !slotByIngredient.has(s.ingredientId)) {
+          slotByIngredient.set(s.ingredientId, s.slot);
+        }
+      }
+      const flowRateForIngredient = (id) => {
+        const slot = slotByIngredient.get(id);
+        return slot ? flowRateForSlot(cal, slot) : cal.defaultFlowOzPerSec;
+      };
+      const body = estimatePourBodySeconds(ingredients, {
+        flowRateForIngredient,
+        defaultFlowOzPerSec: cal.defaultFlowOzPerSec,
+      });
+      totalSeconds = (POUR_SETUP_SECONDS + body) / SPEED_MULT;
+      startStep();
+    })
+    .catch(() => {
+      // Calibration load failed — fall back to the legacy constant so a
+      // mock pour still completes during dev.
+      if (cancelled) return;
+      totalSeconds = (POUR_SETUP_SECONDS + totalVolume * 4.0) / SPEED_MULT;
+      startStep();
+    });
 
   return function cancel() {
     if (cancelled) return;

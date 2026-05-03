@@ -4,6 +4,7 @@ import { ingredientName } from "../ingredients.js";
 import { reloadInventory } from "../app.js";
 import { CLOSE_SVG } from "../icons.js";
 import { putJSON, getJSON } from "../api.js";
+import { showToast } from "../components/toast.js";
 
 // Inventory view for the admin tab shell. Owns the pump-slot grid and the
 // ingredient-picker modal. `host` is the DOM node modals should attach to.
@@ -118,6 +119,7 @@ export function adminInventoryView({ host, setMeta }) {
     } catch (e) {
       console.error(e);
       setMeta("Save failed — retry");
+      showToast(`Save failed — ${e.message}`);
     }
   }
 
@@ -195,6 +197,7 @@ export function adminInventoryView({ host, setMeta }) {
       .catch((e) => {
         console.error(e);
         setMeta("Failed to load inventory");
+        showToast(`Couldn't load inventory — ${e.message}`);
       });
   }
 

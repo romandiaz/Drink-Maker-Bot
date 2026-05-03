@@ -5,6 +5,27 @@ import { glass } from "../components/glass.js";
 import { on, send } from "../ws.js";
 import { appState, setLastDrink } from "../state.js";
 import { formatIngredient as formatStepName } from "../format.js";
+import { showToast } from "../components/toast.js";
+
+// Map a backend POUR_ERROR payload to display copy. Codes come from
+// src/server/serialPour.js and src/server/pour.js.
+function pourErrorMessage(msg) {
+  const ing = msg.ingredient ? formatStepName(msg.ingredient) : null;
+  switch (msg.code) {
+    case "INGREDIENT_NOT_LOADED":
+      return ing ? `No ${ing} loaded — check inventory` : "Ingredient not loaded";
+    case "OUT_OF_INGREDIENT":
+      return ing ? `Out of ${ing}` : "Out of an ingredient";
+    case "UNKNOWN_DRINK":
+      return "Drink not found";
+    case "SERIAL_ERROR":
+      return "Hardware error — try again";
+    default:
+      // Firmware "ERR ..." codes and anything new — keep generic, surface
+      // ingredient name when present so the user knows where it stopped.
+      return ing ? `Pour failed at ${ing}` : "Pour failed";
+  }
+}
 
 export function pouring(props = {}) {
   const drinkId =
@@ -154,10 +175,11 @@ export function pouring(props = {}) {
     })
   );
   unsubs.push(
-    on("POUR_ERROR", () => {
+    on("POUR_ERROR", (msg) => {
       pourActive = false;
       appState.pourProgress = null;
       cleanup();
+      showToast(pourErrorMessage(msg));
       backOnAbort();
     })
   );

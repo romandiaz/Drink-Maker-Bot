@@ -1282,8 +1282,38 @@ export function adjustedIngredients(drink, strength, amount = 1.0) {
 export const totalVolumeOz = (ingredients) =>
   ingredients.reduce((s, i) => s + i.volumeOz, 0);
 
-// Pour-time estimate in seconds: setup overhead + per-oz pour rate.
-export function estimatePourSeconds(drink, strength, amount = 1.0) {
+// Setup overhead — shaker prep, glass placement, valve cycle. Tuned by
+// observation; not currently calibrated.
+export const POUR_SETUP_SECONDS = 15;
+
+// Default flow rate when no slot calibration exists. 0.25 oz/sec ≈ 4 s/oz,
+// the constant the codebase used before per-slot calibration. Kept in sync
+// with src/server/calibration.js so frontend and backend agree on the
+// "uncalibrated" baseline.
+export const DEFAULT_FLOW_OZ_PER_SEC = 0.25;
+
+// Per-ingredient pump time, summed. `flowRateForIngredient(name)` returns
+// oz/sec for the slot holding that ingredient, or undefined to fall back to
+// `defaultFlowOzPerSec`. Pass nothing to get the default-rate estimate.
+export function estimatePourBodySeconds(ingredients, opts = {}) {
+  const {
+    flowRateForIngredient,
+    defaultFlowOzPerSec = DEFAULT_FLOW_OZ_PER_SEC,
+  } = opts;
+  let seconds = 0;
+  for (const ing of ingredients) {
+    const rate = flowRateForIngredient ? flowRateForIngredient(ing.name) : null;
+    const useRate = Number.isFinite(rate) && rate > 0 ? rate : defaultFlowOzPerSec;
+    seconds += ing.volumeOz / useRate;
+  }
+  return seconds;
+}
+
+// Pour-time estimate in seconds: setup overhead + per-ingredient pump time.
+// `opts.flowRateForIngredient` lets the caller plug in calibrated per-slot
+// rates (see calibration-store.js on the frontend, calibration.js on the
+// server); when omitted the legacy constant rate is used.
+export function estimatePourSeconds(drink, strength, amount = 1.0, opts = {}) {
   const adjusted = adjustedIngredients(drink, strength, amount);
-  return Math.round(15 + totalVolumeOz(adjusted) * 4.0);
+  return Math.round(POUR_SETUP_SECONDS + estimatePourBodySeconds(adjusted, opts));
 }

@@ -3,6 +3,7 @@ import { ingredientName } from "../ingredients.js";
 import { isDrinkPourable } from "../inventory-store.js";
 import { reloadInventory, reloadDrinks } from "../app.js";
 import { getJSON } from "../api.js";
+import { showToast } from "../components/toast.js";
 
 // Dashboard view for the admin shell. Aggregates machine + inventory state
 // alongside historical pour stats from /api/stats. Two of its cards
@@ -218,6 +219,7 @@ export function adminDashboardView({ setMeta, onSwitchTab }) {
     } catch (e) {
       console.error(e);
       setMeta("Failed to load dashboard");
+      showToast(`Couldn't load dashboard — ${e.message}`);
     }
   }
 

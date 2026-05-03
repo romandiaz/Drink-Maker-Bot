@@ -11,6 +11,7 @@ import { admin } from "./screens/admin.js";
 import { on, onStatusChange, startWS } from "./ws.js";
 import { replaceDrinks } from "./drinks.js";
 import { loadInventory } from "./inventory-store.js";
+import { loadCalibration } from "./calibration-store.js";
 
 const screens = {
   idle,
@@ -181,10 +182,14 @@ export async function reloadInventory() {
   await loadInventory();
 }
 
+export async function reloadCalibration() {
+  await loadCalibration();
+}
+
 window.addEventListener("DOMContentLoaded", async () => {
   startWS();
   mountWsOverlay();
-  await Promise.all([hydrateDrinks(), loadInventory()]);
+  await Promise.all([hydrateDrinks(), loadInventory(), loadCalibration()]);
   // Every successful pour decrements stock; refresh the cache so drinks that
   // just went out-of-stock reflect as disabled without needing a screen reload.
   on("POUR_COMPLETE", () => { loadInventory(); });
