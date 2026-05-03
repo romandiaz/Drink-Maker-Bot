@@ -1521,7 +1521,6 @@ button.admin-slot__level {
 
 .admin-body--dashboard {
   gap: 10px;
-  overflow-y: hidden;
 }
 
 .dash-status {
@@ -1529,11 +1528,11 @@ button.admin-slot__level {
   display: grid;
   grid-template-columns: auto auto 1fr 1fr 1fr;
   align-items: center;
-  gap: 18px;
+  gap: 22px;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  padding: 10px 14px;
+  padding: 10px 18px;
   min-height: 52px;
 }
 .dash-status__dot {
@@ -1557,9 +1556,9 @@ button.admin-slot__level {
 .dash-stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   border-left: 1px solid var(--border-divider);
-  padding-left: 18px;
+  padding-left: 22px;
 }
 .dash-stat__value {
   font-size: 18px;
@@ -1582,8 +1581,6 @@ button.admin-slot__level {
 }
 .dash-row--lists {
   grid-template-columns: 1fr 1fr;
-  flex: 1 1 auto;
-  min-height: 0;
 }
 .dash-row--shortcuts {
   grid-template-columns: 1fr 1fr;
@@ -1593,11 +1590,11 @@ button.admin-slot__level {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  padding: 10px 14px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 0;
+  gap: 10px;
+  overflow: hidden;
 }
 .dash-card__title {
   font-size: 9px;
@@ -1605,6 +1602,15 @@ button.admin-slot__level {
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--text-tertiary);
+}
+.dash-card__body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: center;
+}
+.dash-card__body--empty {
+  grid-template-columns: 1fr;
 }
 .dash-card__empty {
   font-size: 12px;
@@ -1618,24 +1624,23 @@ button.admin-slot__level {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 0;
+  gap: 8px;
+  min-width: 0;
 }
 .dash-list__row {
   display: grid;
-  grid-template-columns: 18px 1fr auto;
+  grid-template-columns: 8px 1fr auto;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   font-size: 13px;
   color: var(--text-primary);
-  min-height: 24px;
+  min-height: 22px;
 }
-.dash-list__rank {
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.15em;
-  color: var(--text-quaternary);
-  font-variant-numeric: tabular-nums;
+.dash-list__swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
 }
 .dash-list__name {
   white-space: nowrap;
@@ -1647,6 +1652,7 @@ button.admin-slot__level {
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
+  padding-left: 8px;
 }
 
 .dash-card--shortcut {
@@ -1654,31 +1660,88 @@ button.admin-slot__level {
   font-family: inherit;
   text-align: left;
   color: var(--text-primary);
-  position: relative;
-  padding-right: 36px;
   cursor: inherit;
-  min-height: 76px;
+}
+.dash-shortcut__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 .dash-shortcut__primary {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.dash-shortcut__secondary {
+  font-size: 12px;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+/* The recipe suggestion is its own tap target — clicking it jumps to the
+   Inventory tab so the user can complete the swap right where they need to.
+   The chevron after the text is the affordance that says "this is tappable
+   and goes somewhere different than the rest of the card." */
+.dash-shortcut__suggestion {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--border-divider);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  margin: 0;
+  font-family: inherit;
+  text-align: left;
+  cursor: inherit;
+  color: var(--text-primary);
+  align-self: flex-start;
+}
+.dash-shortcut__suggestion::after {
+  content: " ›";
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+/* ---------- Mini donut (admin dashboard cards) ---------- */
+
+.mini-donut {
+  position: relative;
+  flex-shrink: 0;
+}
+.mini-donut__svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.mini-donut__slice {
+  transition: stroke-dasharray 300ms ease, stroke-dashoffset 300ms ease;
+}
+.mini-donut__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  gap: 2px;
+}
+.mini-donut__label {
   font-size: 16px;
   font-weight: 500;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1;
 }
-.dash-shortcut__secondary {
-  font-size: 11px;
-  color: var(--text-secondary);
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.dash-shortcut__arrow {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 24px;
+.mini-donut__sub {
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
   color: var(--text-tertiary);
   line-height: 1;
 }

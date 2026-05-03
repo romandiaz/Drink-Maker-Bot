@@ -3,6 +3,23 @@
 // edits and after POUR_COMPLETE. Screens read via the helpers below instead
 // of re-fetching — keeps the inventory check cheap on every render.
 
+// Bottle is "low" once it dips to this fraction of capacity (15%). Single
+// constant so the inventory tab's yellow fill-bar and the dashboard card's
+// donut/text agree on what counts as low — without it they'd drift.
+export const LOW_BOTTLE_THRESHOLD = 0.15;
+
+// Classify one slot for UX grouping (donut segments, list rows, fill-bar
+// color). Empty is kept distinct from low — an empty bottle needs a refill,
+// not the same yellow "running low" treatment as a partially-full one.
+export function bottleStatus(slot) {
+  if (!slot?.ingredientId) return "unloaded";
+  const remaining = Number(slot.remainingOz) || 0;
+  if (remaining <= 0) return "empty";
+  const capacity = Number(slot.capacityOz) || 0;
+  if (capacity <= 0) return "empty";
+  return remaining / capacity <= LOW_BOTTLE_THRESHOLD ? "low" : "healthy";
+}
+
 const state = {
   loadedIngredients: new Set(),
   // Every ingredient ID currently referenced by an inventory slot, whether

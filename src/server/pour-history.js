@@ -92,12 +92,11 @@ export async function stats() {
     }
   }
 
-  const topDrinks = [...drinkCounts.values()]
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+  // Return every aggregated drink/ingredient — the dashboard renders all of
+  // them on its donut charts and only slices the top few for the text list.
+  const topDrinks = [...drinkCounts.values()].sort((a, b) => b.count - a.count);
   const topIngredients = [...ingredientTotals.values()]
     .sort((a, b) => b.totalOz - a.totalOz)
-    .slice(0, 5)
     .map((i) => ({ ...i, totalOz: Number(i.totalOz.toFixed(1)) }));
 
   return {

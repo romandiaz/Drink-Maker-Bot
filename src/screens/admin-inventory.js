@@ -2,6 +2,7 @@ import { ingredientPicker } from "../components/ingredient-picker.js";
 import { capacityEditor } from "../components/capacity-editor.js";
 import { ingredientName } from "../ingredients.js";
 import { reloadInventory } from "../app.js";
+import { bottleStatus, LOW_BOTTLE_THRESHOLD } from "../inventory-store.js";
 import { CLOSE_SVG } from "../icons.js";
 import { putJSON, getJSON } from "../api.js";
 import { showToast } from "../components/toast.js";
@@ -46,7 +47,7 @@ function slotRow(slot, { onPick, onRefill, onClear, onCapacity }) {
   fill.className = "admin-slot__bar-fill";
   const pct = slot.capacityOz > 0 ? slot.remainingOz / slot.capacityOz : 0;
   fill.style.width = `${Math.max(0, Math.min(1, pct)) * 100}%`;
-  if (pct <= 0.15) fill.classList.add("is-low");
+  if (pct <= LOW_BOTTLE_THRESHOLD) fill.classList.add("is-low");
   bar.appendChild(fill);
   const label = document.createElement("span");
   label.className = "admin-slot__level-label";
@@ -86,9 +87,7 @@ export function adminInventoryView({ host, setMeta }) {
   function updateMeta() {
     if (!inventory) return;
     const loaded = inventory.slots.filter((s) => s.ingredientId).length;
-    const low = inventory.slots.filter(
-      (s) => s.ingredientId && s.remainingOz / s.capacityOz <= 0.15
-    ).length;
+    const low = inventory.slots.filter((s) => bottleStatus(s) === "low").length;
     setMeta(low
       ? `${loaded} / ${inventory.slots.length} loaded · ${low} low`
       : `${loaded} / ${inventory.slots.length} loaded`);
