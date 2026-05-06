@@ -15,6 +15,7 @@ import { showToast } from "../components/toast.js";
 function pourErrorMessage(msg) {
   const ing = msg.ingredient ? formatStepName(msg.ingredient) : null;
   const where = ing ? ` at ${ing}` : "";
+  const stepName = ing || "step";
   switch (msg.code) {
     case "INGREDIENT_NOT_LOADED":
       return ing ? `No ${ing} loaded — check inventory` : "Ingredient not loaded";
@@ -27,11 +28,35 @@ function pourErrorMessage(msg) {
         ? `Hardware error${where}: ${msg.message}`
         : `Hardware error${where} — try again`;
     default: {
-      // Firmware terminal lines arrive as "ERR <reason>" (e.g. "ERR no_weight_change",
-      // "ERR low_flow", "ERR aborted"). Strip the prefix and humanise underscores
-      // so the toast shows the actual cause. Any other unknown code is included
-      // verbatim — better than silently dropping it.
+      // Firmware terminal lines documented in firmware/bartender/bartender.ino:
+      //   ERR pour-timeout <grams>   60s elapsed before reaching target
+      //   ERR no-flow <grams>        5s without measurable progress (empty/clog)
+      //   ERR scale-timeout <grams>  HX711 stopped responding
+      //   ERR aborted                STOP received mid-pour
+      // The trailing number is GRAMS the load cell measured, not seconds —
+      // surfacing it with units prevents the "98.40s vs 122s estimate"
+      // confusion the raw form caused.
       const raw = typeof msg.code === "string" ? msg.code : "";
+      const errMatch = raw.match(/^ERR\s+([\w-]+)\s*(.*)$/);
+      if (errMatch) {
+        const kind = errMatch[1];
+        const grams = parseFloat(errMatch[2]);
+        const gramsLabel = Number.isFinite(grams)
+          ? ` (${grams.toFixed(1)}g delivered)`
+          : "";
+        switch (kind) {
+          case "pour-timeout":
+            return `Pump timeout at ${stepName} — 60s elapsed${gramsLabel}. Flow slower than calibration; check pump or recalibrate.`;
+          case "no-flow":
+            return `No flow at ${stepName}${gramsLabel}. Out of bottle, or clogged tube.`;
+          case "scale-timeout":
+            return `Scale stopped responding at ${stepName}${gramsLabel}.`;
+          case "aborted":
+            return `Pour aborted${where}`;
+        }
+      }
+      // Unknown ERR or non-ERR code — preserve verbatim so something useful
+      // makes it to the Notifications log.
       const reason = raw.startsWith("ERR")
         ? raw.slice(3).trim().replace(/_/g, " ")
         : raw;

@@ -2,9 +2,16 @@
 // swap implementations on a single env-var check.
 //
 // Per-ingredient flow: look up the slot in inventory, convert oz -> grams
-// (flat 1.0 g/mL for now), send "POUR <slot> <grams>", await DONE.
+// (flat 1.0 g/mL for now), send "POUR <slot> <grams> <max-sec>", await DONE.
 // Multi-ingredient drinks pour sequentially; the firmware tares before
 // each POUR so each call means "add this many grams from rest."
+//
+// max-sec is computed from the slot's calibrated flow rate × a slop factor
+// so the firmware's runaway-pour cap scales with the requested grams. Slow
+// pumps (e.g. 0.04 oz/s on a soda channel) used to trip the firmware's
+// fixed 60s cap on perfectly normal pours; tying the cap to calibration
+// fixes that and also means recalibrating a slot updates its timeout for
+// free. The firmware clamps to its own 15-min hard ceiling regardless.
 
 import {
   adjustedIngredients,
@@ -14,11 +21,23 @@ import {
 import { consume, loadInventory } from "./inventory.js";
 import { sendCommand, sendRaw } from "./serial.js";
 import { record as recordPour } from "./pour-history.js";
+import { loadCalibration, flowRateForSlot } from "./calibration.js";
 
 const ML_PER_OZ = 29.5735;
 // Flat density covers spirits/juices to within ~5%. Per-ingredient density
 // is a follow-up once syrups need accurate dosing.
 const DEFAULT_DENSITY_G_PER_ML = 1.0;
+
+// Multiplier applied to the calibrated expected duration before sending
+// the firmware its per-pour timeout. 2x absorbs normal pump variability,
+// air-column settling, and minor calibration drift without ever firing on
+// a healthy pour.
+const POUR_TIMEOUT_SLOP = 2.0;
+// Fixed buffer added on top of the multiplied estimate. Covers per-pour
+// fixed costs (relay actuation, initial settling) that aren't proportional
+// to volume — without it a tiny 0.25oz pour at 0.25 oz/s would get a
+// 2-second budget, which is too tight when the scale needs ~150ms to settle.
+const POUR_TIMEOUT_BUFFER_SEC = 5;
 
 export function serialPour(order, send) {
   const drink = order.customDrink || getDrinkById(order.drinkId);
@@ -41,7 +60,10 @@ export function serialPour(order, send) {
   let cancelled = false;
 
   (async () => {
-    const inventory = await loadInventory();
+    const [inventory, calibration] = await Promise.all([
+      loadInventory(),
+      loadCalibration(),
+    ]);
     let cumulativeVolume = 0;
 
     for (let stepIndex = 0; stepIndex < ingredients.length; stepIndex++) {
@@ -71,8 +93,11 @@ export function serialPour(order, send) {
       });
 
       const grams = ing.volumeOz * ML_PER_OZ * DEFAULT_DENSITY_G_PER_ML;
+      const ozPerSec = flowRateForSlot(calibration, slotRow.slot);
+      const expectedSec = ing.volumeOz / ozPerSec;
+      const maxSec = Math.ceil(expectedSec * POUR_TIMEOUT_SLOP + POUR_TIMEOUT_BUFFER_SEC);
       const response = await sendCommand(
-        `POUR ${slotRow.slot} ${grams.toFixed(2)}`,
+        `POUR ${slotRow.slot} ${grams.toFixed(2)} ${maxSec}`,
         {
           // Firmware streams "PROGRESS <grams>" lines every ~250ms during
           // the pour. Convert back to oz and project onto the whole-drink

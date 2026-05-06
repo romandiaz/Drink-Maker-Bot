@@ -14,12 +14,19 @@
 //   -> TARE                  #<id>  ->  OK TARE #<id>
 //   -> CAL  <known_grams>    #<id>  ->  OK CAL <factor> #<id>
 //   -> RUN  <slot> <ms>      #<id>  ->  DONE #<id>
-//   -> POUR <slot> <grams>   #<id>  ->  PROGRESS <poured_grams> #<id>     (streamed every ~250ms)
+//   -> POUR <slot> <grams> [<max-sec>] #<id>
+//                                    ->  PROGRESS <poured_grams> #<id>     (streamed every ~250ms)
 //                                        ...
 //                                        DONE <actual_grams> #<id>
 //                                    or  ERR no-flow <actual> #<id>       (weight stalled; bottle empty / clog)
 //                                    or  ERR scale-timeout <actual> #<id> (HX711 stopped responding)
-//                                    or  ERR pour-timeout <actual> #<id>  (catchall: 60s elapsed)
+//                                    or  ERR pour-timeout <actual> #<id>  (host-supplied max-sec elapsed)
+//
+//      <max-sec> is optional. Host computes it from the slot's calibrated
+//      flow rate × a slop factor, so the cap scales with the requested
+//      grams instead of being a fixed constant. Omitting it falls back to
+//      POUR_TIMEOUT_MS_DEFAULT below — used by the diag sketch and the
+//      manual serial console where no calibration is available.
 //   -> PING                  #<id>  ->  PONG #<id>
 //   -> STOP                          ->  OK STOP                (no-ID, fire-and-forget)
 //                                        ERR aborted #<pour-id> (only if a POUR was in flight)
@@ -65,9 +72,13 @@ struct CalRecord {
   float scaleFactor;
 };
 
-// Kill any closed-loop pour that hasn't reached target by here. Catches an
-// empty bottle or a wedged load cell so a pump can't run forever.
-const uint32_t POUR_TIMEOUT_MS = 60000;
+// Kill any closed-loop pour that hasn't reached target by here. The host
+// supplies a per-pour value as an optional 3rd POUR arg, computed from
+// the slot's calibrated flow rate. These two constants are only the
+// fallback (host omits the arg) and the hard ceiling (host value clamped
+// to this so a misconfigured host can't make a pump run forever).
+const uint32_t POUR_TIMEOUT_MS_DEFAULT = 600000UL;  // 10 min — generous fallback
+const uint32_t POUR_TIMEOUT_MS_MAX     = 900000UL;  // 15 min — hard ceiling
 
 // Stop slightly early to compensate for liquid still in the air column.
 // Tune once real pumps are mounted.
@@ -240,13 +251,33 @@ void handleCommand(String line) {
   int sp2 = rest.indexOf(' ');
   if (sp2 < 0) { Serial.print("ERR bad-format"); printIdSuffix(); return; }
   int slotArg = rest.substring(0, sp2).toInt();
-  float arg = rest.substring(sp2 + 1).toFloat();
+  String afterSlot = rest.substring(sp2 + 1);
+  afterSlot.trim();
+  // toFloat() stops at the first non-numeric char, so it correctly grabs
+  // just the grams/ms even when an optional 3rd arg follows.
+  float arg = afterSlot.toFloat();
   if (slotArg < 1 || slotArg > 16) { Serial.print("ERR bad-slot"); printIdSuffix(); return; }
   uint8_t slot = (uint8_t)(slotArg - 1);
 
-  if (op.equalsIgnoreCase("RUN"))       runTimed(slot, (uint32_t)arg);
-  else if (op.equalsIgnoreCase("POUR")) pourClosedLoop(slot, arg);
-  else                                  { Serial.print("ERR unknown-cmd"); printIdSuffix(); }
+  if (op.equalsIgnoreCase("RUN")) {
+    runTimed(slot, (uint32_t)arg);
+  } else if (op.equalsIgnoreCase("POUR")) {
+    // Optional 3rd arg: max-seconds. Falls back to POUR_TIMEOUT_MS_DEFAULT
+    // when absent (diag sketch, manual console). Clamped to MAX so a
+    // misconfigured host can't disable the runaway-pour safety net.
+    uint32_t pourTimeoutMs = POUR_TIMEOUT_MS_DEFAULT;
+    int sp3 = afterSlot.indexOf(' ');
+    if (sp3 >= 0) {
+      float maxSec = afterSlot.substring(sp3 + 1).toFloat();
+      if (maxSec > 0) {
+        uint32_t requested = (uint32_t)(maxSec * 1000.0f);
+        pourTimeoutMs = requested > POUR_TIMEOUT_MS_MAX ? POUR_TIMEOUT_MS_MAX : requested;
+      }
+    }
+    pourClosedLoop(slot, arg, pourTimeoutMs);
+  } else {
+    Serial.print("ERR unknown-cmd"); printIdSuffix();
+  }
 }
 
 void calibrateScale(float knownG) {
@@ -279,7 +310,7 @@ void runTimed(uint8_t slot, uint32_t ms) {
   printIdSuffix();
 }
 
-void pourClosedLoop(uint8_t slot, float targetG) {
+void pourClosedLoop(uint8_t slot, float targetG, uint32_t timeoutMs) {
   // Stash the ID so peekStop() can reference it if STOP arrives mid-pour;
   // the host needs to know which queued POUR to fail.
   inflightPourId = currentId;
@@ -301,7 +332,7 @@ void pourClosedLoop(uint8_t slot, float targetG) {
   bool noFlow = false;
   bool scaleTimeout = false;
   while (poured < (targetG - POUR_OVERSHOOT_GUARD_G)) {
-    if (millis() - start > POUR_TIMEOUT_MS) { timedOut = true; break; }
+    if (millis() - start > timeoutMs) { timedOut = true; break; }
     if (peekStop()) { inflightPourId = ""; return; }
     wdt_reset();
     if (!scale.wait_ready_timeout(SCALE_READ_TIMEOUT_MS)) {

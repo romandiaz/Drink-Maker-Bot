@@ -3433,6 +3433,10 @@ button.admin-slot__level {
   font-family: inherit;
   color: inherit;
   width: 100%;
+  /* Buttons default to border-box, divs to content-box. The Notifications
+     screen uses divs; without this the rows overflow by ~26px and clip the
+     timestamp on the right. */
+  box-sizing: border-box;
 }
 .history-row--tappable {
   appearance: none;
