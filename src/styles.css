@@ -1168,6 +1168,34 @@ body {
   inset: -6px;
 }
 .admin-btn svg { width: 16px; height: 16px; display: block; }
+
+/* Notifications bell — same envelope as .admin-btn so it sits cleanly next to
+   the ready indicator in the admin header. Slightly larger glyph (18px) since
+   the lucide bell has thinner strokes than the cog. */
+.notifications-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  position: relative;
+}
+.notifications-btn::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+.notifications-btn svg { width: 18px; height: 18px; display: block; }
+.header-right-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
 .idle-clock {
   font-size: 12px;
   font-weight: 500;
@@ -3434,6 +3462,25 @@ button.admin-slot__level {
   font-size: 11px;
   color: var(--text-secondary);
   line-height: 1.4;
+}
+
+/* Notifications rows reuse history-row layout but pick up a left-border
+   accent that mirrors the toast variant they came from — error rows pop,
+   info rows stay quiet. */
+.notification-row {
+  border-left-width: 3px;
+}
+.notification-row[data-variant="error"] {
+  border-left-color: var(--accent-shots);
+}
+.notification-row[data-variant="info"] {
+  border-left-color: var(--text-secondary);
+}
+.notification-row[data-variant="error"] .history-row__name {
+  color: var(--accent-shots);
+}
+.notification-row[data-variant="info"] .history-row__name {
+  color: var(--text-secondary);
 }
 
 /* ── Admin Network tab ────────────────────────────────────────────── */

@@ -1,9 +1,9 @@
 // Header component: station header used across every screen except idle-only moments.
 // Composes three slots — left (back button + titles), center (search pill), right (ready/count/custom).
 
-import { CHEVRON_LEFT_SVG, SEARCH_SVG, CLOSE_SVG, COG_SVG } from "../icons.js";
+import { CHEVRON_LEFT_SVG, SEARCH_SVG, CLOSE_SVG, COG_SVG, BELL_SVG } from "../icons.js";
 import { getMachineStatus, onMachineStatus } from "../machine-status.js";
-import { goBack } from "../app.js";
+import { goBack, navigate } from "../app.js";
 import { requestAdminAccess } from "../admin-auth.js";
 
 export function backButton(onBack) {
@@ -55,6 +55,19 @@ export function readyIndicator() {
   applyStatus(el, getMachineStatus());
   indicatorRegistry.add(el);
   return el;
+}
+
+// Bell button — navigates to the standalone Notifications screen. Lives in
+// the admin header's right slot since the log is admin-tier info; not
+// exposed to guests via the global header.
+export function notificationsButton() {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "notifications-btn tappable";
+  btn.setAttribute("aria-label", "Notifications");
+  btn.innerHTML = BELL_SVG;
+  btn.addEventListener("click", () => navigate("notifications"));
+  return btn;
 }
 
 // Reusable cog button that opens the PIN-gated admin flow. Same visual on

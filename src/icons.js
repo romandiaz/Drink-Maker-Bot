@@ -26,6 +26,15 @@ export const CHECK_SVG = `
   </svg>
 `;
 
+// Lucide-style bell. Header notifications button + a small unread dot
+// applied via CSS when the indicator is showing.
+export const BELL_SVG = `
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  </svg>
+`;
+
 // Lucide "settings" cog — eight rounded teeth around a central circle. Reads
 // as a gear at small sizes (14–16px) far better than the prior sun/rays glyph.
 export const COG_SVG = `

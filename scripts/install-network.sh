@@ -46,6 +46,19 @@ EOF
 read -r -p "Continue? [y/N] " confirm
 [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
 
+# 0) iptables — Debian 13 (Trixie) ships nftables as the kernel default and
+# does not install the `iptables` command by itself. Our dispatcher script
+# shells out to `iptables`, so without this package the rules silently never
+# install (REDIRECT and FORWARD DROP both quietly missing). The package on
+# Trixie is `iptables-nft`, a thin compat shim over nftables — same syntax,
+# rules end up in the nftables backend the kernel already uses.
+if ! command -v iptables >/dev/null; then
+  sudo apt-get install -y iptables
+  echo "  ✓ installed iptables (nftables-backed)"
+else
+  echo "  ✓ iptables already present"
+fi
+
 # 1) sudoers — let the kiosk user run nmcli without a password.
 SUDOERS_FILE="/etc/sudoers.d/nmcli-kiosk"
 echo "$KIOSK_USER ALL=(ALL) NOPASSWD: /usr/bin/nmcli" \

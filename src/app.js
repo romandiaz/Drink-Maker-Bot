@@ -9,6 +9,7 @@ import { shotPicker } from "./screens/shot-picker.js";
 import { shotDetail } from "./screens/shot-detail.js";
 import { buildYourOwn } from "./screens/build-your-own.js";
 import { admin } from "./screens/admin.js";
+import { notifications } from "./screens/admin-notifications.js";
 import { on, onStatusChange, startWS } from "./ws.js";
 import { replaceDrinks, setCategoryEnabledLookup } from "./drinks.js";
 import { loadInventory } from "./inventory-store.js";
@@ -37,6 +38,7 @@ const screens = {
   shotDetail,
   buildYourOwn,
   admin,
+  notifications,
 };
 
 // Inactivity: any screen except idle (already there) and pouring (don't interrupt
@@ -44,7 +46,7 @@ const screens = {
 // also exempt — an admin walking off mid-edit shouldn't get punted to idle and
 // lose the tab they were on.
 const INACTIVITY_MS = 60_000;
-const NO_TIMEOUT_SCREENS = new Set(["idle", "pouring", "admin"]);
+const NO_TIMEOUT_SCREENS = new Set(["idle", "pouring", "admin", "notifications"]);
 
 let currentScreen = null;
 let currentScreenName = null;

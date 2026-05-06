@@ -16,6 +16,7 @@ import {
   list as pourList,
   clear as pourClear,
 } from "./pour-history.js";
+import * as notifications from "./notifications.js";
 import {
   loadCalibration,
   saveCalibration,
@@ -47,9 +48,11 @@ let pour = mockPour;
 // Well-known captive-portal probe paths. iOS, Android, and Windows all hit
 // specific URLs after joining a network to detect whether they have real
 // internet access. In Host mode we hijack their DNS to point here, so these
-// requests land on us — return a 302 to "/" instead of the default 404 so
-// the OS interprets us as a captive portal and pops its built-in browser
-// pointed at the kiosk.
+// requests land on us. First contact from a device gets a 302 to "/" so the
+// OS pops its captive browser; subsequent probes from the same device return
+// success once it's been "signed in" (see signedInIPs below) so the OS clears
+// the captive flag and the user can use the kiosk in their regular browser
+// (where WebSockets work — the captive sandbox often breaks them).
 const CAPTIVE_PROBE_PATHS = new Set([
   "/hotspot-detect.html",
   "/library/test/success.html",
@@ -60,6 +63,28 @@ const CAPTIVE_PROBE_PATHS = new Set([
   "/check_network_status.txt",
   "/canonical.html",
 ]);
+
+// Apple-flavored probes look for a specific HTML body, not a 204. Returning
+// 204 to these doesn't reliably clear iOS's captive flag on older versions.
+const APPLE_PROBE_PATHS = new Set([
+  "/hotspot-detect.html",
+  "/library/test/success.html",
+]);
+const APPLE_SUCCESS_HTML =
+  "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>";
+
+// IPs that have loaded a real kiosk asset (not just a probe). Once an IP is
+// in here, future probe responses tell the OS the network is healthy and the
+// captive sandbox dismisses. Process-lifetime only — restart the backend and
+// every device re-runs the captive flow, which is fine.
+const signedInIPs = new Set();
+
+function clientIp(req) {
+  const raw = req.socket.remoteAddress || "";
+  // Strip the IPv4-mapped IPv6 prefix Node uses on dual-stack sockets so
+  // "::ffff:10.42.0.5" and "10.42.0.5" don't count as different devices.
+  return raw.startsWith("::ffff:") ? raw.slice(7) : raw;
+}
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -190,6 +215,28 @@ async function handleApi(req, res, urlPath) {
   }
   if (urlPath === "/api/history" && req.method === "DELETE") {
     sendJson(res, 200, await pourClear());
+    return true;
+  }
+
+  if (urlPath === "/api/notifications" && req.method === "GET") {
+    sendJson(res, 200, await notifications.list());
+    return true;
+  }
+  if (urlPath === "/api/notifications" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      await notifications.record({
+        message: body && body.message,
+        variant: body && body.variant,
+      });
+      sendJson(res, 201, { ok: true });
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
+  if (urlPath === "/api/notifications" && req.method === "DELETE") {
+    sendJson(res, 200, await notifications.clear());
     return true;
   }
 
@@ -437,7 +484,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const resolvedPath = urlPath === "/" ? "/index.html" : urlPath;
+  // /welcome is the captive-portal interstitial — shown to phones that just
+  // joined the AP, separate from the kiosk so the captive sandbox never has
+  // to render the full UI (where WebSockets are flaky). See welcome.html.
+  const resolvedPath =
+    urlPath === "/" ? "/index.html" :
+    urlPath === "/welcome" ? "/welcome.html" :
+    urlPath;
   const filePath = normalize(join(SRC_DIR, resolvedPath));
   if (!filePath.startsWith(SRC_DIR)) {
     res.writeHead(403);
@@ -446,7 +499,23 @@ const server = http.createServer(async (req, res) => {
   }
   if (!existsSync(filePath) || !statSync(filePath).isFile()) {
     if (CAPTIVE_PROBE_PATHS.has(urlPath)) {
-      res.writeHead(302, { Location: "/" });
+      if (signedInIPs.has(clientIp(req))) {
+        // Tell the OS the network is healthy. Captive flag clears, sandbox
+        // dismisses, the user's regular browser tab finishes loading.
+        if (APPLE_PROBE_PATHS.has(urlPath)) {
+          res.writeHead(200, { "Content-Type": "text/html" });
+          res.end(APPLE_SUCCESS_HTML);
+        } else {
+          res.writeHead(204);
+          res.end();
+        }
+        return;
+      }
+      // First probe from this device — pop the captive browser at the
+      // welcome interstitial, not the kiosk itself. The interstitial bounces
+      // the user out to a regular browser (Chrome via intent on Android,
+      // Safari via NFC-queued tab on iOS).
+      res.writeHead(302, { Location: "/welcome" });
       res.end();
       return;
     }
@@ -454,6 +523,12 @@ const server = http.createServer(async (req, res) => {
     res.end("Not found");
     return;
   }
+
+  // Successful asset serve — mark this device as having loaded the kiosk so
+  // its OS-level probes will start succeeding. Covers index.html, app.js,
+  // styles.css, drink images: anything that means a phone is actually using
+  // us rather than just being probed.
+  signedInIPs.add(clientIp(req));
 
   const mime = MIME[extname(filePath)] || "application/octet-stream";
   const body = await readFile(filePath);

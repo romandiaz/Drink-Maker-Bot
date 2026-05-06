@@ -8,9 +8,13 @@ import { formatIngredient as formatStepName } from "../format.js";
 import { showToast } from "../components/toast.js";
 
 // Map a backend POUR_ERROR payload to display copy. Codes come from
-// src/server/serialPour.js and src/server/pour.js.
+// src/server/serialPour.js and src/server/pour.js. The default branch
+// preserves the raw firmware reason and any attached message so the
+// Notifications tab carries enough info to debug what actually happened —
+// otherwise every unknown failure looked identical to "Pour failed at X".
 function pourErrorMessage(msg) {
   const ing = msg.ingredient ? formatStepName(msg.ingredient) : null;
+  const where = ing ? ` at ${ing}` : "";
   switch (msg.code) {
     case "INGREDIENT_NOT_LOADED":
       return ing ? `No ${ing} loaded — check inventory` : "Ingredient not loaded";
@@ -19,11 +23,22 @@ function pourErrorMessage(msg) {
     case "UNKNOWN_DRINK":
       return "Drink not found";
     case "SERIAL_ERROR":
-      return "Hardware error — try again";
-    default:
-      // Firmware "ERR ..." codes and anything new — keep generic, surface
-      // ingredient name when present so the user knows where it stopped.
-      return ing ? `Pour failed at ${ing}` : "Pour failed";
+      return msg.message
+        ? `Hardware error${where}: ${msg.message}`
+        : `Hardware error${where} — try again`;
+    default: {
+      // Firmware terminal lines arrive as "ERR <reason>" (e.g. "ERR no_weight_change",
+      // "ERR low_flow", "ERR aborted"). Strip the prefix and humanise underscores
+      // so the toast shows the actual cause. Any other unknown code is included
+      // verbatim — better than silently dropping it.
+      const raw = typeof msg.code === "string" ? msg.code : "";
+      const reason = raw.startsWith("ERR")
+        ? raw.slice(3).trim().replace(/_/g, " ")
+        : raw;
+      const detail = msg.message ? ` (${msg.message})` : "";
+      if (reason) return `Pour failed${where}: ${reason}${detail}`;
+      return `Pour failed${where}${detail}`;
+    }
   }
 }
 

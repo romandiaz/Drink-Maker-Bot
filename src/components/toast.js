@@ -27,7 +27,7 @@ function ensureMounted() {
 export function showToast(message, opts = {}) {
   if (!message) return;
   ensureMounted();
-  const { variant = "error", duration = 4000 } = opts;
+  const { variant = "error", duration = 4000, log = true } = opts;
 
   if (hideTimer) {
     clearTimeout(hideTimer);
@@ -43,6 +43,18 @@ export function showToast(message, opts = {}) {
 
   if (duration > 0) {
     hideTimer = setTimeout(hideToast, duration);
+  }
+
+  // Persist to the backend Notifications log so the admin can replay
+  // anything that flashed by — most pour errors are gone in 4s. Fire-and-
+  // forget; a failed POST shouldn't block the visible toast or cascade into
+  // a second toast about the logging failure.
+  if (log) {
+    fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: String(message), variant }),
+    }).catch(() => {});
   }
 }
 

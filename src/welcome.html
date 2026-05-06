@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>DrinkBot</title>
+  <style>
+    /* Inlined so the page is captive-browser-friendly — some captive sandboxes
+       cache aggressively or refuse extra resource loads. The visual language
+       here mirrors the kiosk tokens (dark, flat, status-ready green). */
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: #0a0a0a;
+      color: #f5f5f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    main {
+      max-width: 360px; width: 100%;
+      text-align: center;
+    }
+    .check {
+      width: 64px; height: 64px;
+      margin: 0 auto 24px;
+      border-radius: 999px;
+      border: 2px solid #4ade80;
+      color: #4ade80;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 34px; line-height: 1;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 28px; font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+    p {
+      margin: 0 0 24px;
+      font-size: 15px; color: #888;
+      line-height: 1.5;
+    }
+    button {
+      appearance: none;
+      width: 100%;
+      background: #4ade80;
+      border: none;
+      border-radius: 999px;
+      color: #0a0a0a;
+      font-family: inherit;
+      font-size: 16px; font-weight: 600;
+      letter-spacing: 0.02em;
+      padding: 16px 24px;
+      min-height: 56px;
+    }
+    button:active { opacity: 0.85; }
+    .hint {
+      margin-top: 24px;
+      font-size: 13px; color: #666;
+    }
+    .hint strong { color: #aaa; font-weight: 500; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="check" aria-hidden="true">✓</div>
+    <h1>You're connected</h1>
+    <p>You're on the DrinkBot network. Tap below to start ordering.</p>
+    <button id="continue" type="button">Open the bar →</button>
+    <p class="hint">If nothing happens, open your browser and go to <strong>drinkbot.party</strong></p>
+  </main>
+  <script>
+    (function () {
+      var btn = document.getElementById("continue");
+      var KIOSK_URL = "http://drinkbot.party/";
+      // Android intent URL — asks the OS to open the URL in Chrome
+      // specifically, escaping the captive WebView. Stock Android's
+      // CaptivePortalLogin honors this; some vendor skins ignore it and
+      // treat it as a regular navigation, which is also fine.
+      var INTENT_URL =
+        "intent://drinkbot.party/#Intent;scheme=http;package=com.android.chrome;end";
+
+      btn.addEventListener("click", function () {
+        // Android: tell the captive WebView the user is done. Closes the
+        // captive browser and clears the network's captive flag so a regular
+        // browser can use it. No-op (and silently swallowed) on iOS.
+        try {
+          if (window.captivePortalLogin && typeof window.captivePortalLogin.useNetwork === "function") {
+            window.captivePortalLogin.useNetwork();
+          }
+        } catch (e) {}
+
+        var ua = navigator.userAgent || "";
+        if (/Android/i.test(ua)) {
+          window.location.href = INTENT_URL;
+          // If the intent didn't take (vendor skin or older WebView), fall
+          // back to a regular navigation after a beat. The IP is already
+          // marked signed-in from this page load, so the OS's next probe
+          // will succeed and captive will dismiss either way.
+          setTimeout(function () { window.location.href = KIOSK_URL; }, 500);
+          return;
+        }
+
+        // iOS and everything else: navigate within the captive browser.
+        // CNA can't programmatically escape itself, but this page load
+        // already marked the IP signed-in, which accelerates iOS's next
+        // probe and dismisses CNA. NFC users have a Safari tab queued
+        // up that finishes loading on dismiss.
+        window.location.href = KIOSK_URL;
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import { header } from "../components/header.js";
+import { header, notificationsButton, readyIndicator } from "../components/header.js";
 import { adminDashboardView } from "./admin-dashboard.js";
 import { adminInventoryView } from "./admin-inventory.js";
 import { adminRecipesView } from "./admin-recipes.js";
@@ -28,12 +28,19 @@ export function admin() {
   element.className = "screen screen--admin";
   element.dataset.screen = "admin";
 
+  // Right slot composes the bell (entry to the standalone Notifications
+  // screen) alongside the ready indicator. Notifications used to be a tab —
+  // moved out to keep the admin tab strip from running off the edge.
+  const headerRight = document.createElement("div");
+  headerRight.className = "header-right-cluster";
+  headerRight.append(notificationsButton(), readyIndicator());
+
   element.appendChild(
     header({
       back: true,
       eyebrow: "Station 01",
       title: "Admin",
-      right: "ready",
+      right: headerRight,
     })
   );
 
