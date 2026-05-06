@@ -30,6 +30,34 @@ systemctl status bartender-kiosk     # backend status
 journalctl -u bartender-kiosk -f     # backend logs
 ```
 
+## Network setup (admin Network tab + AP mode)
+
+The admin Network tab lets a host switch the Pi between **Client** mode (joining a saved WiFi network) and **Host** mode (broadcasting a "DrinkBot" hotspot for guest phones). In Host mode a captive portal funnels any guest-phone HTTP traffic to the kiosk URL, so iOS and Android pop their built-in captive browsers automatically when a phone joins.
+
+These features need three system-level changes. `scripts/install-network.sh` does all three:
+
+```bash
+bash scripts/install-network.sh
+```
+
+What it installs (idempotent — safe to re-run):
+
+- `/etc/sudoers.d/nmcli-kiosk` — lets the kiosk user run `nmcli` without a password. The backend shells out to `nmcli` for every network operation; without this, the admin Network tab surfaces a clear "sudo not configured" error.
+- `/etc/NetworkManager/dnsmasq-shared.d/captive.conf` — DNS hijack. Loaded by NM's shared-mode dnsmasq when Hotspot is active; resolves every DNS query from AP clients to the Pi's gateway IP (`10.42.0.1`).
+- `/etc/NetworkManager/dispatcher.d/99-drinkbot-captive` — iptables dispatcher. When Hotspot comes up, redirects port 80 traffic to the kiosk on port 3000 and drops upstream forwarding (so guests can only reach the kiosk, not the wider internet).
+
+After install, open admin → Network on the touchscreen. Tapping **Host** broadcasts `DrinkBot` (default password `drinkbot`, change it from the same screen). Tapping **Client** returns to your home WiFi.
+
+Diagnostics:
+
+```bash
+journalctl -u NetworkManager -f          # NM events, dispatcher script errors
+sudo iptables -t nat -L PREROUTING -n    # confirm the port-80 redirect is live
+pgrep -af 'dnsmasq.*shared'              # confirm hijack dnsmasq is running
+```
+
+**SSH heads-up:** switching modes from any device connected to the Pi over WiFi will drop that connection (the radio changes networks). Run mode switches from the touchscreen, or keep an Ethernet cable plugged in for a stable SSH path during testing.
+
 ## Development
 
 On a desktop, run the backend by hand and open the page in a browser:

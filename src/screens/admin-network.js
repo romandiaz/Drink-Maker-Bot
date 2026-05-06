@@ -388,6 +388,7 @@ export function adminNetworkView({ host, setMeta }) {
 
     panel.appendChild(keyboard({
       extended: true,
+      numbers: true,
       onLetter: (ch) => { value += ch; paint(); },
       onBackspace: () => { value = value.slice(0, -1); paint(); },
     }));

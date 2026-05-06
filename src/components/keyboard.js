@@ -20,7 +20,7 @@ const BACK_SVG = `
   </svg>
 `;
 
-export function keyboard({ onLetter, onBackspace, extended = false } = {}) {
+export function keyboard({ onLetter, onBackspace, extended = false, numbers = false } = {}) {
   const wrap = document.createElement("div");
   wrap.className = "keyboard";
 
@@ -36,6 +36,23 @@ export function keyboard({ onLetter, onBackspace, extended = false } = {}) {
       shiftBtn.classList.toggle("is-active", shifted);
       shiftBtn.setAttribute("aria-pressed", shifted ? "true" : "false");
     }
+  }
+
+  // Optional digits row above the letters — admin uses this for WiFi SSIDs
+  // and passwords. Search deliberately omits it: drink names don't contain
+  // digits and the extra row eats vertical space the result list needs.
+  if (numbers) {
+    const r = document.createElement("div");
+    r.className = "keyboard-row keyboard-row--numbers";
+    for (const d of ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "keyboard-key tappable";
+      btn.textContent = d;
+      btn.addEventListener("click", () => onLetter?.(d));
+      r.appendChild(btn);
+    }
+    wrap.appendChild(r);
   }
 
   ROWS.forEach((row, idx) => {
@@ -118,6 +135,11 @@ export function keyboard({ onLetter, onBackspace, extended = false } = {}) {
       // Sticky on-screen shift overrides the physical case; otherwise the
       // browser already encoded physical-shift state into `key`.
       onLetter?.(shifted ? key.toUpperCase() : key);
+      return;
+    }
+    if (numbers && /^[0-9]$/.test(key)) {
+      e.preventDefault();
+      onLetter?.(key);
       return;
     }
     if (extended && (key === " " || key === "." || key === "'")) {

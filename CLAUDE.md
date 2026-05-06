@@ -213,15 +213,18 @@ For now, `src/server/pour.js` exports `mockPour()` that emits the above progress
 
 The target image is **Raspberry Pi OS Lite (32-bit)** on a Pi 3 B+. We don't run the full LXDE desktop — just `xinit` + Openbox + Chromium, to keep RAM headroom for the browser.
 
-First-time setup is automated by `scripts/install-kiosk.sh`:
+First-time setup is two scripts. Run both in order on a fresh Pi OS Lite install:
 
 ```bash
 # On the Pi, after cloning:
-bash scripts/install-kiosk.sh
+bash scripts/install-kiosk.sh    # X, Node, Chromium, systemd service
+bash scripts/install-network.sh  # nmcli sudoers, captive portal AP plumbing
 sudo reboot
 ```
 
-The script installs the minimal X stack, Node 20, and Chromium; sets up tty1 autologin; writes `~/.bash_profile`, `~/.xinitrc`, and `~/.config/openbox/autostart`; and registers `bartender-kiosk.service` (systemd) to run the backend on boot. After reboot the Pi auto-logs in on tty1, starts X via Openbox, and Chromium launches in `--kiosk` mode against `http://localhost:3000`.
+`install-kiosk.sh` installs the minimal X stack, Node 20, and Chromium; sets up tty1 autologin; writes `~/.bash_profile`, `~/.xinitrc`, and `~/.config/openbox/autostart`; and registers `bartender-kiosk.service` (systemd) to run the backend on boot. After reboot the Pi auto-logs in on tty1, starts X via Openbox, and Chromium launches in `--kiosk` mode against `http://localhost:3000`.
+
+`install-network.sh` adds the system bits the admin Network tab and AP/captive-portal mode depend on: a `NOPASSWD: /usr/bin/nmcli` sudoers entry for the kiosk user, a DNS-hijack config in `/etc/NetworkManager/dnsmasq-shared.d/`, and an iptables dispatcher script in `/etc/NetworkManager/dispatcher.d/` that flips on whenever the `Hotspot` connection comes up. Idempotent. See README "Network setup" for details.
 
 For dev iteration on the Pi without the full kiosk flow, the backend can still be run by hand:
 

@@ -44,6 +44,23 @@ const SRC_DIR = resolve(__dirname, "..");
 // without any temporal-dead-zone fragility.
 let pour = mockPour;
 
+// Well-known captive-portal probe paths. iOS, Android, and Windows all hit
+// specific URLs after joining a network to detect whether they have real
+// internet access. In Host mode we hijack their DNS to point here, so these
+// requests land on us — return a 302 to "/" instead of the default 404 so
+// the OS interprets us as a captive portal and pops its built-in browser
+// pointed at the kiosk.
+const CAPTIVE_PROBE_PATHS = new Set([
+  "/hotspot-detect.html",
+  "/library/test/success.html",
+  "/generate_204",
+  "/gen_204",
+  "/connecttest.txt",
+  "/ncsi.txt",
+  "/check_network_status.txt",
+  "/canonical.html",
+]);
+
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
@@ -428,6 +445,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+    if (CAPTIVE_PROBE_PATHS.has(urlPath)) {
+      res.writeHead(302, { Location: "/" });
+      res.end();
+      return;
+    }
     res.writeHead(404);
     res.end("Not found");
     return;
