@@ -89,8 +89,11 @@ function normalize(input, { existingId } = {}) {
     }));
   if (ingredients.length === 0) throw new Error("at least one ingredient required");
 
+  // `enabled` defaults true so legacy records without the field stay visible.
+  // Only an explicit `false` hides a drink from the main UI.
+  const enabled = input.enabled === false ? false : true;
   const id = existingId || uniqueId(slugify(name) || "drink");
-  return { id, name, tagline, category, glassType, ingredients, garnish, topUp, needsIce, color };
+  return { id, name, tagline, category, glassType, ingredients, garnish, topUp, needsIce, color, enabled };
 }
 
 export async function create(payload) {
@@ -109,6 +112,15 @@ export async function update(id, payload) {
   cache[idx] = drink;
   await persist();
   return drink;
+}
+
+export async function setEnabled(id, enabled) {
+  if (!cache) await load();
+  const idx = cache.findIndex((d) => d.id === id);
+  if (idx < 0) throw new Error("not found");
+  cache[idx] = { ...cache[idx], enabled: Boolean(enabled) };
+  await persist();
+  return cache[idx];
 }
 
 export async function remove(id) {

@@ -130,23 +130,24 @@ html, body {
 
 ## Screen routing
 
-One function, one argument. No library.
+A small history-stack router in `app.js`. No library. Each screen module exports a factory: `export function idle(props) { return { element, mount, unmount }; }`. Four navigation primitives drive the stack:
 
 ```js
-const screens = { idle, category, search, drinkList, detail, pouring, complete };
-let currentScreen = null;
-
-export function navigate(screenName, props = {}) {
-  if (currentScreen) currentScreen.unmount();
-  const root = document.getElementById('app');
-  root.innerHTML = '';
-  currentScreen = screens[screenName](props);
-  root.appendChild(currentScreen.element);
-  currentScreen.mount?.();
-}
+navigate(screen, props)             // push a new entry, slide-in animation
+goBack(steps = 1)                   // pop entries, slide-out animation; floors at the root
+replaceWith(screen, props, dir?)    // swap top entry — previous screen vanishes from history
+resetStack(...entries)              // clear and rebuild the stack; entry = string | [screen, props]
 ```
 
-Each screen module exports a factory: `export function idle(props) { return { element, mount, unmount }; }`
+Rules of thumb:
+
+- **Forward navigation:** `navigate("detail", { drinkId })`.
+- **Back buttons:** call `goBack()`. The header's back button defaults to `goBack` when no `onBack` is supplied — most screens just omit `onBack` entirely.
+- **Mid-flow screens that should never be back targets** (e.g. pouring → complete): use `replaceWith` so the in-flight screen pops off when the next one arrives.
+- **End-of-flow returns** (Done, auto-return-to-idle, "Another"): use `resetStack` to seed a clean back path. `resetStack("idle")` is the canonical "fully reset" call; `resetStack("idle", ["detail", { drinkId }])` says "land on detail, but back from here goes to idle."
+- **First mount and `#admin` direct entry:** `resetStack(initialScreen)` — there's no outgoing element so the transition is instant.
+
+Each entry stores `{ screen, props }`. Re-mounting on back goes through the screen factory again — screens should be idempotent on re-mount and read live state (inventory, machine status) from their stores rather than expecting props to carry it. Animation direction (`push` / `pop` / `none`) is decided by which primitive was called, not chosen by callers.
 
 ## Interaction rules (from the brief, enforced in code)
 

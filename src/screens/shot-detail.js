@@ -63,7 +63,6 @@ export function shotDetail(props = {}) {
 
   element.appendChild(
     header({
-      onBack: () => navigate("shotPicker", {}, "pop"),
       eyebrow: "Pour a shot",
       eyebrowAccent: "var(--accent-shots)",
       title: displayName,

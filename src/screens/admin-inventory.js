@@ -96,6 +96,7 @@ export function adminInventoryView({ host, setMeta }) {
   function render() {
     element.innerHTML = "";
     if (!inventory) return;
+    element.appendChild(toolbar());
     for (const slot of inventory.slots) {
       element.appendChild(
         slotRow(slot, {
@@ -107,6 +108,29 @@ export function adminInventoryView({ host, setMeta }) {
       );
     }
     updateMeta();
+  }
+
+  function toolbar() {
+    const bar = document.createElement("div");
+    bar.className = "admin-inventory-toolbar";
+
+    const refillAll = document.createElement("button");
+    refillAll.type = "button";
+    refillAll.className = "admin-inventory-toolbar__btn tappable";
+    refillAll.textContent = "Refill all";
+    const loaded = inventory.slots.filter((s) => s.ingredientId);
+    refillAll.disabled = loaded.length === 0;
+    refillAll.addEventListener("click", handleRefillAll);
+    bar.appendChild(refillAll);
+
+    return bar;
+  }
+
+  function handleRefillAll() {
+    const loaded = inventory.slots.filter((s) => s.ingredientId);
+    if (loaded.length === 0) return;
+    for (const s of loaded) s.remainingOz = s.capacityOz;
+    save();
   }
 
   async function save() {
@@ -124,8 +148,16 @@ export function adminInventoryView({ host, setMeta }) {
 
   function openPicker(slot) {
     if (pickerEl) pickerEl.remove();
+    // Disable ingredients already assigned to a different slot — each pump
+    // slot holds a distinct bottle, so the same ingredient in two slots would
+    // be a config error. The current slot's own ingredient stays enabled (it
+    // renders as is-selected) so the admin can keep it without re-picking.
+    const assignedElsewhere = inventory.slots
+      .filter((s) => s.slot !== slot.slot && s.ingredientId)
+      .map((s) => s.ingredientId);
     pickerEl = ingredientPicker({
       current: slot.ingredientId,
+      disabledIds: assignedElsewhere,
       onCancel: () => {
         pickerEl?.remove();
         pickerEl = null;

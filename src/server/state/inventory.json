@@ -4,98 +4,98 @@
       "slot": 1,
       "ingredientId": "gin",
       "capacityOz": 33,
-      "remainingOz": 28.5
+      "remainingOz": 31.5
     },
     {
       "slot": 2,
-      "ingredientId": "vodka",
+      "ingredientId": "coconut-cream",
       "capacityOz": 33,
-      "remainingOz": 12.5
+      "remainingOz": 30.5
     },
     {
       "slot": 3,
       "ingredientId": "whiskey",
       "capacityOz": 33,
-      "remainingOz": 25.5
+      "remainingOz": 31.5
     },
     {
       "slot": 4,
       "ingredientId": "rum",
       "capacityOz": 25,
-      "remainingOz": 0
+      "remainingOz": 19.5
     },
     {
       "slot": 5,
-      "ingredientId": "tequila",
+      "ingredientId": "orgeat",
       "capacityOz": 25,
-      "remainingOz": 17
+      "remainingOz": 22
     },
     {
       "slot": 6,
-      "ingredientId": "campari",
+      "ingredientId": "pineapple-juice",
       "capacityOz": 25,
-      "remainingOz": 24.2
+      "remainingOz": 19.5
     },
     {
       "slot": 7,
       "ingredientId": "grenadine",
       "capacityOz": 25,
-      "remainingOz": 23.3
+      "remainingOz": 22
     },
     {
       "slot": 8,
-      "ingredientId": "vermouth",
+      "ingredientId": "bitters",
       "capacityOz": 25,
-      "remainingOz": 23.7
+      "remainingOz": 23.5
     },
     {
       "slot": 9,
-      "ingredientId": "coconut-cream",
+      "ingredientId": "campari",
       "capacityOz": 25,
-      "remainingOz": 25
+      "remainingOz": 15
     },
     {
       "slot": 10,
       "ingredientId": "simple-syrup",
       "capacityOz": 25,
-      "remainingOz": 20.6
+      "remainingOz": 22
     },
     {
       "slot": 11,
-      "ingredientId": "bitters",
+      "ingredientId": "sweet-vermouth",
       "capacityOz": 4,
-      "remainingOz": 2.9
+      "remainingOz": 0.5
     },
     {
       "slot": 12,
       "ingredientId": "lime-juice",
       "capacityOz": 25,
-      "remainingOz": 11.1
+      "remainingOz": 22
     },
     {
       "slot": 13,
       "ingredientId": "lemon-juice",
       "capacityOz": 25,
-      "remainingOz": 22.9
+      "remainingOz": 22
     },
     {
       "slot": 14,
       "ingredientId": "orange-juice",
       "capacityOz": 25,
-      "remainingOz": 21
+      "remainingOz": 10.2
     },
     {
       "slot": 15,
       "ingredientId": "triple-sec",
       "capacityOz": 25,
-      "remainingOz": 23.1
+      "remainingOz": 22.5
     },
     {
       "slot": 16,
       "ingredientId": "soda",
       "capacityOz": 25,
-      "remainingOz": 18.2
+      "remainingOz": 17.5
     }
   ],
-  "updatedAt": "2026-05-02T19:21:24.071Z"
+  "updatedAt": "2026-05-06T05:46:55.284Z"
 }

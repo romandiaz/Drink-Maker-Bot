@@ -7,11 +7,23 @@ import { pouring } from "./screens/pouring.js";
 import { complete } from "./screens/complete.js";
 import { shotPicker } from "./screens/shot-picker.js";
 import { shotDetail } from "./screens/shot-detail.js";
+import { buildYourOwn } from "./screens/build-your-own.js";
 import { admin } from "./screens/admin.js";
 import { on, onStatusChange, startWS } from "./ws.js";
-import { replaceDrinks } from "./drinks.js";
+import { replaceDrinks, setCategoryEnabledLookup } from "./drinks.js";
 import { loadInventory } from "./inventory-store.js";
 import { loadCalibration } from "./calibration-store.js";
+import {
+  loadCategoriesConfig,
+  isCategoryEnabled,
+} from "./category-store.js";
+import { requestAdminAccess, dismissAdminPrompt } from "./admin-auth.js";
+import { clearBuildDraft } from "./state.js";
+
+// Hand drinks.js a way to ask "is this category enabled?" without a circular
+// import. setCategoryEnabledLookup just stores the function; the live
+// disabled set lives in category-store.js.
+setCategoryEnabledLookup(isCategoryEnabled);
 
 const screens = {
   idle,
@@ -23,13 +35,16 @@ const screens = {
   complete,
   shotPicker,
   shotDetail,
+  buildYourOwn,
   admin,
 };
 
 // Inactivity: any screen except idle (already there) and pouring (don't interrupt
-// an active pour) returns to idle after 60 seconds without a touch.
+// an active pour) returns to idle after 60 seconds without a touch. Admin is
+// also exempt — an admin walking off mid-edit shouldn't get punted to idle and
+// lose the tab they were on.
 const INACTIVITY_MS = 60_000;
-const NO_TIMEOUT_SCREENS = new Set(["idle", "pouring"]);
+const NO_TIMEOUT_SCREENS = new Set(["idle", "pouring", "admin"]);
 
 let currentScreen = null;
 let currentScreenName = null;
@@ -41,6 +56,13 @@ let inactivityTimer = null;
 const TRANSITION_MS = 250;
 let pendingCleanup = null;
 
+// History stack — every entry is { screen, props }. The top of the stack is
+// the screen on screen. Mutated by navigate / goBack / replaceWith / resetStack;
+// the back button uses this instead of hard-coded destinations so the same
+// button does the right thing whether the user came from search, drink-list,
+// idle, or anywhere else.
+const stack = [];
+
 function resetInactivityTimer() {
   if (inactivityTimer) {
     clearTimeout(inactivityTimer);
@@ -49,11 +71,22 @@ function resetInactivityTimer() {
   if (NO_TIMEOUT_SCREENS.has(currentScreenName)) return;
   inactivityTimer = setTimeout(() => {
     inactivityTimer = null;
-    if (!NO_TIMEOUT_SCREENS.has(currentScreenName)) navigate("idle", {}, "pop");
+    if (!NO_TIMEOUT_SCREENS.has(currentScreenName)) {
+      // A PIN modal left up by a user who walked away shouldn't survive the
+      // auto-return — otherwise the next person finds it on top of idle.
+      dismissAdminPrompt();
+      // The next guest shouldn't inherit the previous user's half-built
+      // recipe — wipe the draft alongside the screen reset.
+      clearBuildDraft();
+      resetStack("idle");
+    }
   }, INACTIVITY_MS);
 }
 
-export function navigate(screenName, props = {}, direction = "push") {
+// Internal — mounts the screen and runs the transition. Pure presentation;
+// stack mutation happens in the public navigate / goBack / replaceWith /
+// resetStack helpers.
+function doTransition(screenName, props, direction) {
   const factory = screens[screenName];
   if (!factory) throw new Error(`Unknown screen: ${screenName}`);
 
@@ -112,6 +145,51 @@ export function navigate(screenName, props = {}, direction = "push") {
   setTimeout(() => { if (pendingCleanup === cleanup) cleanup(); }, TRANSITION_MS + 20);
 
   resetInactivityTimer();
+}
+
+// Push a new screen onto the stack. Default forward navigation.
+export function navigate(screen, props = {}) {
+  stack.push({ screen, props: { ...props } });
+  doTransition(screen, props, "push");
+}
+
+// Walk back `steps` entries on the stack. Header back buttons call this with
+// no argument (= 1 step) by default. Stops at the root entry; if the stack
+// somehow empties (defensive — shouldn't happen) we fall through to idle.
+export function goBack(steps = 1) {
+  while (steps > 0 && stack.length > 1) {
+    stack.pop();
+    steps--;
+  }
+  if (stack.length === 0) stack.push({ screen: "idle", props: {} });
+  const top = stack[stack.length - 1];
+  doTransition(top.screen, top.props, "pop");
+}
+
+// Swap the top entry — the previous screen vanishes from history. Used when
+// the screen being left should never be a back target (e.g. pouring → complete).
+export function replaceWith(screen, props = {}, direction = "push") {
+  if (stack.length === 0) stack.push({ screen, props: { ...props } });
+  else stack[stack.length - 1] = { screen, props: { ...props } };
+  doTransition(screen, props, direction);
+}
+
+// Clear the stack and rebuild it from `entries` — each entry is either a
+// screen name string or `[screen, props]`. The last entry becomes the active
+// screen. Used for "Done"-style returns to idle and for jumps that should
+// re-seed the back path (e.g. complete's "Another" button).
+export function resetStack(...entries) {
+  stack.length = 0;
+  for (const e of entries) {
+    if (typeof e === "string") stack.push({ screen: e, props: {} });
+    else stack.push({ screen: e[0], props: { ...(e[1] || {}) } });
+  }
+  if (stack.length === 0) stack.push({ screen: "idle", props: {} });
+  const top = stack[stack.length - 1];
+  // First mount uses resetStack("idle") with no outgoing element — direction
+  // is moot in that case. Otherwise treat reset as a return-style transition.
+  const direction = currentScreen ? "pop" : "none";
+  doTransition(top.screen, top.props, direction);
 }
 
 // Global touch press feedback. CLAUDE.md mandates `.pressed` on touchstart, removed on touchend,
@@ -186,21 +264,38 @@ export async function reloadCalibration() {
   await loadCalibration();
 }
 
+export async function reloadCategoriesConfig() {
+  await loadCategoriesConfig();
+}
+
 window.addEventListener("DOMContentLoaded", async () => {
   startWS();
   mountWsOverlay();
-  await Promise.all([hydrateDrinks(), loadInventory(), loadCalibration()]);
+  await Promise.all([
+    hydrateDrinks(),
+    loadInventory(),
+    loadCalibration(),
+    loadCategoriesConfig(),
+  ]);
   // Every successful pour decrements stock; refresh the cache so drinks that
   // just went out-of-stock reflect as disabled without needing a screen reload.
-  on("POUR_COMPLETE", () => { loadInventory(); });
+  // A successful pour also retires the build-your-own draft — the just-poured
+  // recipe is "consumed", and the next category-tap should land on an empty
+  // editor (complete-screen "Another" reseeds explicitly via setBuildDraft).
+  on("POUR_COMPLETE", () => {
+    loadInventory();
+    clearBuildDraft();
+  });
   // `#admin` is the direct entry point for the inventory screen when you
   // have a keyboard attached; the idle eyebrow 5-tap is the in-kiosk path.
-  const initial = location.hash === "#admin" ? "admin" : "idle";
-  navigate(initial);
+  // The hash route is PIN-gated like the on-screen entries so there's no
+  // backdoor — start at idle, then prompt.
+  resetStack("idle");
+  if (location.hash === "#admin") requestAdminAccess();
 });
 
 window.addEventListener("hashchange", () => {
   if (location.hash === "#admin" && currentScreenName !== "admin") {
-    navigate("admin");
+    requestAdminAccess();
   }
 });

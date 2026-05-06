@@ -1,9 +1,11 @@
-import { navigate } from "../app.js";
 import { header } from "../components/header.js";
 import { adminDashboardView } from "./admin-dashboard.js";
 import { adminInventoryView } from "./admin-inventory.js";
 import { adminRecipesView } from "./admin-recipes.js";
+import { adminSubmissionsView } from "./admin-submissions.js";
 import { adminMaintenanceView } from "./admin-maintenance.js";
+import { adminHistoryView } from "./admin-history.js";
+import { adminNetworkView } from "./admin-network.js";
 
 // Tab shell for the admin area. Holds a fixed header, a tab switcher, the
 // active view's body, and a shared footer. Views own their own data fetching
@@ -15,7 +17,10 @@ const TABS = [
   { id: "dashboard", label: "Dashboard", factory: adminDashboardView, hint: "Tap a card for details" },
   { id: "inventory", label: "Inventory", factory: adminInventoryView, hint: "Changes save automatically" },
   { id: "recipes", label: "Recipes", factory: adminRecipesView, hint: "Changes save automatically" },
+  { id: "submissions", label: "Submissions", factory: adminSubmissionsView, hint: "Promote guest builds into the catalog" },
+  { id: "history", label: "History", factory: adminHistoryView, hint: "Newest pours first · capped at 500" },
   { id: "maintenance", label: "Maintenance", factory: adminMaintenanceView, hint: "Routines run on the live machine" },
+  { id: "network", label: "Network", factory: adminNetworkView, hint: "Switch wlan0 between client and host mode" },
 ];
 
 export function admin() {
@@ -26,10 +31,9 @@ export function admin() {
   element.appendChild(
     header({
       back: true,
-      onBack: () => navigate("idle", {}, "pop"),
       eyebrow: "Station 01",
       title: "Admin",
-      right: "none",
+      right: "ready",
     })
   );
 

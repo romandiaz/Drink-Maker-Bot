@@ -3,11 +3,13 @@ import {
   categories,
   drinks,
   getDrinksByCategory,
+  isDrinkEnabled,
 } from "../drinks.js";
-import { header } from "../components/header.js";
+import { header, readyIndicator, adminButton } from "../components/header.js";
 import { glass } from "../components/glass.js";
 import { setCurrentCategory } from "../state.js";
 import { isDrinkPourable, loadedIngredientCount, slotCount } from "../inventory-store.js";
+import { isCategoryEnabled } from "../category-store.js";
 
 function splitName(name) {
   const [first, ...rest] = name.split(" ");
@@ -103,10 +105,41 @@ function shotsPill() {
   return btn;
 }
 
+// Sibling to the shots pill: opens the freeform build-your-own editor. Stored
+// submissions are reviewed by admin and can be promoted into the catalog.
+function buildPill() {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "shots-pill build-pill tappable";
+
+  const glassSlot = document.createElement("span");
+  glassSlot.className = "shots-pill__glass";
+  glassSlot.appendChild(glass({ glassType: "rocks", color: "#9b8cff" }, { width: 22 }));
+  btn.appendChild(glassSlot);
+
+  const label = document.createElement("span");
+  label.className = "shots-pill__label";
+  label.textContent = "Build your own →";
+  btn.appendChild(label);
+
+  btn.addEventListener("click", () => {
+    setCurrentCategory("build");
+    navigate("buildYourOwn");
+  });
+
+  return btn;
+}
+
 export function category() {
   const element = document.createElement("section");
   element.className = "screen";
   element.dataset.screen = "category";
+
+  // Right slot: admin gear alongside the ready indicator. Mirrors the idle
+  // screen's cluster so admin is reachable from the most-used browse screens.
+  const rightSlot = document.createElement("div");
+  rightSlot.className = "header-right-cluster";
+  rightSlot.append(adminButton(), readyIndicator());
 
   element.appendChild(
     header({
@@ -115,28 +148,34 @@ export function category() {
       title: "Choose a category",
       search: true,
       onSearch: () => navigate("search"),
-      right: "ready",
+      right: rightSlot,
     })
   );
 
   const grid = document.createElement("div");
   grid.className = "category-grid";
-  for (const cat of categories) {
-    if (cat.id === "shots") continue;
+  const visibleCats = categories.filter(
+    (cat) => cat.id !== "shots" && isCategoryEnabled(cat.id)
+  );
+  grid.style.setProperty("--cat-count", visibleCats.length || 1);
+  for (const cat of visibleCats) {
     grid.appendChild(categoryTile(cat));
   }
   element.appendChild(grid);
 
   const shotsRow = document.createElement("div");
   shotsRow.className = "category-shots-row";
-  shotsRow.appendChild(shotsPill());
+  if (isCategoryEnabled("shots")) shotsRow.appendChild(shotsPill());
+  shotsRow.appendChild(buildPill());
   element.appendChild(shotsRow);
 
   const footer = document.createElement("footer");
   footer.className = "screen-footer";
   const meta = document.createElement("span");
   meta.className = "screen-footer__meta";
-  const pourable = drinks.filter(isDrinkPourable).length;
+  const pourable = drinks.filter(
+    (d) => isDrinkEnabled(d) && isCategoryEnabled(d.category) && isDrinkPourable(d)
+  ).length;
   const slots = slotCount();
   const loaded = loadedIngredientCount();
   const loadedLabel = slots > 0

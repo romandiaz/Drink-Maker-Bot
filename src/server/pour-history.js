@@ -56,6 +56,20 @@ export async function record({ drinkId, drinkName, ingredients }) {
   await persist();
 }
 
+// Newest-first list for the History admin tab. Entries are stored append-only
+// (oldest first); reversing here keeps the storage shape simple and the read
+// path obvious.
+export async function list() {
+  const data = await load();
+  return { entries: [...data.entries].reverse() };
+}
+
+export async function clear() {
+  cache = { entries: [] };
+  await persist();
+  return { ok: true, entries: [] };
+}
+
 function startOfTodayMs() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);

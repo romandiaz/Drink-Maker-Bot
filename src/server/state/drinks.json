@@ -18,7 +18,8 @@
       ],
       "garnish": "olive",
       "color": "#E8DFA8",
-      "photo": "assets/drinks/martini.png"
+      "photo": "assets/drinks/martini.png",
+      "enabled": true
     },
     {
       "id": "manhattan",
@@ -42,7 +43,8 @@
       ],
       "garnish": "cherry",
       "color": "#B8483A",
-      "photo": "assets/drinks/manhattan.png"
+      "photo": "assets/drinks/manhattan.png",
+      "enabled": true
     },
     {
       "id": "negroni",
@@ -67,7 +69,8 @@
       "garnish": "orange-peel",
       "needsIce": true,
       "color": "#C94E3A",
-      "photo": "assets/drinks/negroni.png"
+      "photo": "assets/drinks/negroni.png",
+      "enabled": true
     },
     {
       "id": "old-fashioned",
@@ -1721,5 +1724,5 @@
       "photo": "assets/drinks/mary-pickford.png"
     }
   ],
-  "updatedAt": "2026-05-01T19:14:49.795Z"
+  "updatedAt": "2026-05-06T00:42:48.618Z"
 }

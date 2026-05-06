@@ -24,6 +24,7 @@ import {
   formatTopUpList,
   joinList,
 } from "../format.js";
+import { getMachineStatus, onMachineStatus } from "../machine-status.js";
 
 // Donut colors: the first four match the category accents so a drink's primary
 // ingredient reads in the category color; the rest are neutral fillers for
@@ -192,7 +193,6 @@ export function detail(props = {}) {
 
     element.appendChild(
       header({
-        onBack: () => navigate("drinkList", { categoryId: drink.category }, "pop"),
         title: "Confirm pour",
         search: true,
         onSearch: () => navigate("search"),
@@ -266,7 +266,12 @@ export function detail(props = {}) {
     }
 
     ingredientsWrap.appendChild(ingredientsList);
-    ingredientsWrap.appendChild(createDonutChart(adjusted));
+    // Donut + center total reflect what the machine actually pours. Shortfall
+    // ingredients are listed above with outline dots (and surfaced again as the
+    // by-hand banner below), so excluding them here keeps the "X oz total"
+    // honest — otherwise it'd promise volume the pumps aren't going to deliver.
+    const machinePoured = adjusted.filter((i) => !shortfallByName.has(i.name));
+    ingredientsWrap.appendChild(createDonutChart(machinePoured));
     right.appendChild(ingredientsWrap);
 
     right.appendChild(
@@ -294,25 +299,42 @@ export function detail(props = {}) {
       )
     );
 
+    const machineStatus = getMachineStatus();
+    const machineBusy = machineStatus.status !== "idle";
+    const busyLabel =
+      machineStatus.status === "pouring"
+        ? "Machine pouring · please wait"
+        : "Machine in maintenance · please wait";
+
     if (shortfalls.length === 0) {
       const seconds = estimatePourSeconds(drink, order.strength, order.amount, {
         flowRateForIngredient,
         defaultFlowOzPerSec: defaultFlowOzPerSec(),
       });
-      right.appendChild(
-        pourButton({
-          accent: cat.accent,
-          label: `Pour · Ready in ~${seconds}s`,
-          onClick: (e) => {
-            e.currentTarget.disabled = true;
-            // Clear any stale by-hand list from a prior manual pour of this
-            // drink — otherwise the complete screen would tell the user to
-            // add ingredients we just dispensed.
-            setPendingOrder({ ...order, missingByHand: null });
-            navigate("pouring", { drinkId: drink.id });
-          },
-        })
-      );
+      if (machineBusy) {
+        const disabled = document.createElement("button");
+        disabled.type = "button";
+        disabled.className = "pour-btn pour-btn--disabled";
+        disabled.disabled = true;
+        disabled.style.setProperty("--accent", cat.accent);
+        disabled.textContent = busyLabel;
+        right.appendChild(disabled);
+      } else {
+        right.appendChild(
+          pourButton({
+            accent: cat.accent,
+            label: `Pour · Ready in ~${seconds}s`,
+            onClick: (e) => {
+              e.currentTarget.disabled = true;
+              // Clear any stale by-hand list from a prior manual pour of this
+              // drink — otherwise the complete screen would tell the user to
+              // add ingredients we just dispensed.
+              setPendingOrder({ ...order, missingByHand: null });
+              navigate("pouring", { drinkId: drink.id });
+            },
+          })
+        );
+      }
     } else if (!primaryShort) {
       // Primary is available — user can complete the recipe by hand. Snapshot
       // the by-hand list with strength/amount-adjusted volumes onto the
@@ -329,17 +351,27 @@ export function detail(props = {}) {
         .filter((ing) => !shortfallByName.has(ing.name))
         .reduce((s, i) => s + i.volumeOz, 0);
       const seconds = Math.round(15 + pouredVolume * 4.0);
-      right.appendChild(
-        pourButton({
-          accent: cat.accent,
-          label: `Pour · Ready in ~${seconds}s`,
-          onClick: (e) => {
-            e.currentTarget.disabled = true;
-            setPendingOrder({ ...order, missingByHand: byHand });
-            navigate("pouring", { drinkId: drink.id });
-          },
-        })
-      );
+      if (machineBusy) {
+        const disabled = document.createElement("button");
+        disabled.type = "button";
+        disabled.className = "pour-btn pour-btn--disabled";
+        disabled.disabled = true;
+        disabled.style.setProperty("--accent", cat.accent);
+        disabled.textContent = busyLabel;
+        right.appendChild(disabled);
+      } else {
+        right.appendChild(
+          pourButton({
+            accent: cat.accent,
+            label: `Pour · Ready in ~${seconds}s`,
+            onClick: (e) => {
+              e.currentTarget.disabled = true;
+              setPendingOrder({ ...order, missingByHand: byHand });
+              navigate("pouring", { drinkId: drink.id });
+            },
+          })
+        );
+      }
     } else {
       // Primary itself is short — the recipe is structurally blocked. Distinguish
       // "no slot at all" (admin needs to load a bottle) from "slot empty / low"
@@ -382,6 +414,8 @@ export function detail(props = {}) {
   }
 
   render();
+  let unsubMachine = null;
+  let lastStatus = getMachineStatus().status;
   return {
     element,
     mount() {
@@ -393,7 +427,22 @@ export function detail(props = {}) {
       loadInventory().then(() => {
         if (shortfallSignature() !== before) render();
       });
+      // Re-render when the machine flips between idle/busy from any source
+      // (another tablet starting a pour, maintenance finishing, etc.) so the
+      // pour button enables/disables in step. Skip mid-pour progress updates —
+      // status string is stable while a pour runs.
+      unsubMachine = onMachineStatus((s) => {
+        if (s.status !== lastStatus) {
+          lastStatus = s.status;
+          render();
+        }
+      });
     },
-    unmount() {},
+    unmount() {
+      if (unsubMachine) {
+        unsubMachine();
+        unsubMachine = null;
+      }
+    },
   };
 }

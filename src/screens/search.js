@@ -108,7 +108,6 @@ export function search() {
       : "none";
     headerSlot.appendChild(
       header({
-        onBack: () => navigate("category", {}, "pop"),
         centerEl: searchField({ value: query, onClear: () => setQuery("") }),
         right,
       })

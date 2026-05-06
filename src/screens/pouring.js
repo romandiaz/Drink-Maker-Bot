@@ -1,7 +1,7 @@
-import { navigate } from "../app.js";
+import { goBack, replaceWith } from "../app.js";
 import { drinks, getDrinkById } from "../drinks.js";
 import { header } from "../components/header.js";
-import { glass } from "../components/glass.js";
+import { glass, layeredGlass } from "../components/glass.js";
 import { on, send } from "../ws.js";
 import { appState, setLastDrink } from "../state.js";
 import { formatIngredient as formatStepName } from "../format.js";
@@ -65,7 +65,11 @@ export function pouring(props = {}) {
 
   const glassCol = document.createElement("div");
   glassCol.className = "pouring-glass";
-  glassCol.appendChild(glass(drink, { width: 240 }));
+  // Custom drinks have no photo and no meaningful single `color` — render the
+  // same proportional band visualization the user just confirmed on the build
+  // screen so the pour view matches what they designed.
+  const renderGlass = drink.isCustom ? layeredGlass : glass;
+  glassCol.appendChild(renderGlass(drink, { width: 240 }));
   main.appendChild(glassCol);
 
   const progressCol = document.createElement("div");
@@ -155,14 +159,20 @@ export function pouring(props = {}) {
       appState.pourProgress = null;
       setLastDrink(msg.drinkId);
       cleanup();
-      navigate("complete", { drinkId: msg.drinkId });
+      // Replace pouring with complete on the stack — a finished pour should
+      // never be a back target.
+      replaceWith("complete", { drinkId: msg.drinkId }, "push");
     })
   );
-  // Shots don't have a "detail" screen to return to — send the user back to the
-  // shot picker on cancel/error instead.
+  // Cancel / error: pop pouring off the stack so it doesn't linger as a back
+  // target. Regular drinks rewind one entry to detail; shots rewind two
+  // entries — past shotDetail, back to the picker — so the user can choose a
+  // different spirit instead of having to re-confirm the same one. Build-
+  // your-own (also a customDrink) only rewinds one — back to the editor so
+  // the user can tweak and retry.
   function backOnAbort() {
-    if (order.customDrink) navigate("shotPicker", {}, "pop");
-    else navigate("detail", { drinkId: drink.id }, "pop");
+    if (order.customDrink?.isShot) goBack(2);
+    else goBack();
   }
 
   unsubs.push(
@@ -180,6 +190,18 @@ export function pouring(props = {}) {
       appState.pourProgress = null;
       cleanup();
       showToast(pourErrorMessage(msg));
+      backOnAbort();
+    })
+  );
+  // Race: another tablet (or maintenance) grabbed the machine in the gap
+  // between this tablet's tap and the POUR arriving. Bounce back to detail
+  // — the busy indicator will be visible there.
+  unsubs.push(
+    on("POUR_REJECTED", () => {
+      pourActive = false;
+      appState.pourProgress = null;
+      cleanup();
+      showToast("Machine busy — try again in a moment");
       backOnAbort();
     })
   );

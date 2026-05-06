@@ -194,6 +194,41 @@ Decisions made where the brief or screen spec left an ambiguity, per the
   `replaceDrinks()` on the same module instance, edited recipes pour with
   the new ingredients without a restart.
 
+## Navigation history stack
+
+- **Real history, not hardcoded back destinations.** `navigate()` pushes
+  `{ screen, props }` entries onto a stack in `app.js`; `goBack()` pops. Replaces
+  the previous "every back button hardcodes its target" approach where, e.g.,
+  detail's back button always went to drink-list — even when the user got to
+  detail via search or the idle featured drink.
+- **Four primitives:** `navigate` (push), `goBack(n=1)` (pop), `replaceWith`
+  (swap top), `resetStack(...entries)` (clear and rebuild). The header's back
+  button defaults to `goBack`; screens omit `onBack` unless they need a custom
+  action.
+- **`replaceWith` for one-shot screens.** Pouring → complete uses
+  `replaceWith("complete")` so the finished pour can't be reached via back.
+  Same reasoning would apply to any future modal-ish flow.
+- **`resetStack` for end-of-flow returns.** Complete's "Done", the inactivity
+  timeout, and the auto-return-to-idle countdown all call `resetStack("idle")`
+  rather than pushing idle onto an ever-growing stack. Complete's "Another"
+  uses `resetStack("idle", ["detail", { drinkId }])` (or the shotPicker +
+  shotDetail pair for shots) so back from the new detail lands on idle, not
+  on the prior pour.
+- **Pour cancel/error rewinds the stack.** Cancelling a regular drink calls
+  `goBack()` (= pop pouring → land on detail). Cancelling a shot calls
+  `goBack(2)` (= pop pouring + shotDetail → land on shotPicker). Two-step
+  rewind for shots matches the prior behaviour and gets the user back to the
+  spirit selector rather than the same shotDetail they just aborted.
+- **`#admin` direct entry resets the stack** (`resetStack("admin")` on first
+  mount). Back from admin then falls through to `resetStack("idle")` because
+  the stack is at its root — matches the prior hardcoded behaviour without a
+  per-screen check.
+- **Search query doesn't survive back-into-search yet.** `search.js` still
+  clears `appState.searchQuery` in unmount, so navigating search → detail →
+  back rebuilds search with an empty query. Acceptable for v1; revisit by
+  storing the query on the stack entry's props if user feedback says
+  otherwise.
+
 ## Step 10 — Polish
 
 - **Inactivity returns to idle after 60s.** Lives in `app.js` so every screen
@@ -214,3 +249,89 @@ Decisions made where the brief or screen spec left an ambiguity, per the
 - **Donut chart shows total ml in the hole.** Updates live as strength
   changes. Donut SVG is wrapped in a positioned div with the centered label
   layered on top so the SVG's `rotate(-90deg)` doesn't flip the text.
+
+## Admin PIN protection
+
+- **Admin entry is PIN-gated at every entry point.** Idle gear button, idle
+  5-tap eyebrow, category gear button, and `#admin` hash route all funnel
+  through `requestAdminAccess()` in `src/admin-auth.js`, which mounts the PIN
+  modal and only navigates on success. Single chokepoint = no backdoors.
+- **PIN stored in plaintext at `src/server/state/admin-pin.json`.** Default
+  `1234` on first boot. Edit the file directly to change for now; an in-app
+  Settings tile can land later. Plaintext is fine for a home kiosk —
+  physical access to the device is the actual security boundary, and a hash
+  here would just be theatre on a 4-digit PIN.
+- **Verification is one POST.** `POST /api/admin/verify-pin {pin}` →
+  200/401. No rate limiting: brute-forcing 10,000 combinations on a
+  touchscreen keypad is implausible, and the threat model is "guest pokes
+  around", not "attacker with API access".
+- **Modal dismisses on inactivity.** A user who walks away mid-PIN doesn't
+  leave the modal hovering on top of the auto-returned idle screen — the
+  60s inactivity reset calls `dismissAdminPrompt()` before `resetStack`.
+- **Cog icon swap.** The previous admin glyph was a circle with eight rays
+  + a center dot — read as a sun, not settings. Replaced with the Lucide
+  `settings` cog (8 rounded teeth + inner circle). Generic class renamed
+  `idle-admin-btn` → `admin-btn` since the same button now appears on
+  category too.
+- **Same gear on category.** Cluster pattern (`.header-right-cluster`)
+  factored out so both idle (gear + clock + ready) and category
+  (gear + ready) compose the same way.
+
+## Build-your-own + submissions
+
+- **Guest builds land in their own store, not the canonical drinks list.**
+  `src/server/state/submissions.json` is separate from `drinks.json`. The
+  guest flow only POSTs `{name, ingredients}`; everything else (category,
+  glass, color, garnish) is decided at promote time by an admin. Keeping
+  the two stores apart lets guests freely build whatever without polluting
+  what the machine offers by default.
+- **Promote = drinks-store create + submissions remove, atomically server-side.**
+  `POST /api/submissions/:id/promote` runs `drinksStore.create(payload)` first
+  (so a malformed promote bounces with 400 before we drop the original) then
+  removes the submission. The admin's promote payload merges defaults from
+  the editor on top of the guest's name + ingredients.
+- **Promote opens the existing recipe editor pre-filled.** Reusing
+  `drinkEditor` in the Submissions tab gives admins one editing surface
+  instead of two. The editor's `title` prop is now optional so the same
+  modal can read "Promote submission" instead of "Edit drink".
+- **Build-your-own picker is restricted to loaded ingredients.**
+  `ingredientPicker` gained `ids`, `allowNew`, `allowEmpty`, `title` props
+  so the guest flow can show only what's physically in a pump (no
+  "+ New ingredient" tile, no null/empty option). Admin recipe editor still
+  uses defaults — full catalog, new-ingredient affordance.
+- **Pour also saves the submission.** Pressing Pour POSTs to
+  `/api/submissions` *then* navigates to the pouring screen — failure to
+  save logs a toast but doesn't block the pour. We don't expose a
+  save-without-pouring path; if a guest aborts before pouring the recipe
+  was never committed.
+- **Pouring's abort-rewind keyed on `isShot`, not `customDrink`.** Shots
+  rewind two stack entries (past shotDetail, back to shotPicker); build-
+  your-own and any future custom flow rewind one (back to the editor to
+  retry). Single-flag check beats listing custom-drink kinds.
+- **Custom drink color is a static placeholder.** `#888888` for now —
+  picking a meaningful color from a freeform mix is harder than it's
+  worth, and the glass renders fine without it. Admin can set a real
+  color when promoting.
+- **Submissions tab sits between Recipes and Maintenance.** Admin browses
+  Recipes most often; Submissions is reviewed in batches; Maintenance is
+  the rare-but-physical operation. Ordering reflects access frequency.
+
+## History tab
+
+- **Raw log, not analytics.** The Dashboard tab already aggregates pours
+  into donuts and top-N lists; History is the read-only log behind those
+  numbers. Newest pour first, every entry visible without paging — the
+  backend already caps `pour-history.json` at 500 rolling entries so the
+  list can't grow unbounded.
+- **One destructive action: Clear all.** Two-tap confirm pattern (matches
+  Submissions discard) — first tap arms, second commits, auto-resets after
+  3s. No per-row delete: the log is meant to be append-only between
+  intentional wipes, and the dashboard would silently lose data if rows
+  could vanish individually.
+- **Time formatting flips at the day boundary.** Within 24h: relative
+  (`5m ago`, `3h ago`); older: absolute (`May 4 · 2:14 PM`). Relative is
+  fine for a glance at recent activity; older entries need a date so you
+  can tell Tuesday from Sunday without counting hours.
+- **Tab order: last.** History is the rarest tab to open (read-only,
+  diagnostic). Sits after Maintenance; Dashboard / Inventory / Recipes
+  remain the daily-use tabs at the front.

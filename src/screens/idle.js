@@ -1,10 +1,12 @@
 import { navigate } from "../app.js";
-import { drinks, getCategoryById } from "../drinks.js";
-import { header, readyIndicator } from "../components/header.js";
+import { drinks, getCategoryById, isDrinkEnabled } from "../drinks.js";
+import { header, readyIndicator, adminButton } from "../components/header.js";
 import { glass } from "../components/glass.js";
 import { setSelectedDrink } from "../state.js";
 import { isDrinkPourable } from "../inventory-store.js";
+import { isCategoryEnabled } from "../category-store.js";
 import { timeBucket } from "./idle-timeofday.js";
+import { requestAdminAccess } from "../admin-auth.js";
 
 
 const ROTATE_MS = 30000;
@@ -19,10 +21,14 @@ function clockTime() {
 // full list. Each fallback keeps the screen alive if earlier pools come up
 // empty (bucket categories all out of stock, inventory not yet hydrated).
 function pickableDrinks(bucket) {
-  const pourable = drinks.filter(isDrinkPourable);
+  const visible = drinks.filter(
+    (d) => isDrinkEnabled(d) && isCategoryEnabled(d.category)
+  );
+  const pourable = visible.filter(isDrinkPourable);
   const inBucket = pourable.filter((d) => bucket.categoryIds.includes(d.category));
   if (inBucket.length > 0) return inBucket;
   if (pourable.length > 0) return pourable;
+  if (visible.length > 0) return visible;
   return drinks;
 }
 
@@ -41,27 +47,11 @@ export function idle() {
   // entry point to the admin screen; the 5-tap eyebrow gesture below stays as
   // a backup for when the gear is hard to hit.
   const rightSlot = document.createElement("div");
-  rightSlot.className = "idle-right-slot";
-  const adminBtn = document.createElement("button");
-  adminBtn.type = "button";
-  adminBtn.className = "idle-admin-btn tappable";
-  adminBtn.setAttribute("aria-label", "Admin");
-  adminBtn.innerHTML = `
-    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      <circle cx="10" cy="10" r="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/>
-      <path d="M10 2.5V5 M10 15V17.5 M17.5 10H15 M5 10H2.5 M15.3 4.7L13.5 6.5 M6.5 13.5L4.7 15.3 M15.3 15.3L13.5 13.5 M6.5 6.5L4.7 4.7"
-        stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-    </svg>
-  `;
-  adminBtn.addEventListener("click", (e) => {
-    // Prevent the idle tap-anywhere handler from also firing → category.
-    e.stopPropagation();
-    navigate("admin");
-  });
+  rightSlot.className = "header-right-cluster";
   const clockEl = document.createElement("span");
   clockEl.className = "idle-clock";
   clockEl.textContent = clockTime();
-  rightSlot.append(adminBtn, clockEl, readyIndicator());
+  rightSlot.append(adminButton(), clockEl, readyIndicator());
 
   const headerEl = header({
     back: false,
@@ -84,7 +74,7 @@ export function idle() {
     if (tapTimer) clearTimeout(tapTimer);
     if (tapCount >= 5) {
       tapCount = 0;
-      navigate("admin");
+      requestAdminAccess();
       return;
     }
     tapTimer = setTimeout(() => {

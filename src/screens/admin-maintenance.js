@@ -5,6 +5,7 @@ import {
   reloadCalibration,
 } from "../app.js";
 import { showToast } from "../components/toast.js";
+import { getMachineStatus, onMachineStatus } from "../machine-status.js";
 
 // Maintenance view for the admin tab shell. Three groups of canned routines:
 //
@@ -25,7 +26,11 @@ import { showToast } from "../components/toast.js";
 
 const PRIME_DURATION_SEC = 6;
 const FLUSH_DURATION_SEC = 15;
-const CALIBRATE_TARGET_OZ = 1.5;
+// Long enough to dampen pump start-up jitter (first ~1s flow rate is uneven
+// while the line repressurises) but short enough that an admin doesn't lose
+// patience and the cup doesn't overflow at fast pump rates. ~60g at the
+// default rate ≈ 2 oz, which fits a standard shot glass.
+const CALIBRATE_DURATION_SEC = 8;
 
 function formatRate(ozPerSec) {
   if (!Number.isFinite(ozPerSec) || ozPerSec <= 0) return "—";
@@ -77,13 +82,31 @@ export function adminMaintenanceView({ host, setMeta }) {
   let calibration = null;
   let busy = false;
   let calibrateModalEl = null;
+  let unsubMachine = null;
+
+  // The local `busy` flag covers in-flight admin requests from this tablet;
+  // server-side status covers anyone else (a pour from a kiosk tablet or a
+  // second admin session). Either disables the maintenance controls.
+  function isLocked() {
+    return busy || getMachineStatus().status !== "idle";
+  }
+
+  function refreshDisabled() {
+    const locked = isLocked();
+    element.classList.toggle("is-busy", locked);
+    for (const b of element.querySelectorAll(".maint-btn")) {
+      if (b.dataset.alwaysEnabled) continue;
+      if (b.dataset.alwaysDisabled) {
+        b.disabled = true;
+        continue;
+      }
+      b.disabled = locked;
+    }
+  }
 
   function setBusy(v) {
     busy = v;
-    element.classList.toggle("is-busy", v);
-    for (const b of element.querySelectorAll(".maint-btn")) {
-      if (!b.dataset.alwaysEnabled) b.disabled = v;
-    }
+    refreshDisabled();
   }
 
   async function load() {
@@ -110,7 +133,7 @@ export function adminMaintenanceView({ host, setMeta }) {
   }
 
   async function runEndpoint(url, body, { successMsg, refreshInventory = false }) {
-    if (busy) return;
+    if (isLocked()) return;
     setBusy(true);
     try {
       await postJSON(url, body);
@@ -141,7 +164,7 @@ export function adminMaintenanceView({ host, setMeta }) {
       showToast("No bottles loaded");
       return;
     }
-    if (busy) return;
+    if (isLocked()) return;
     setBusy(true);
     const durationSec = mode === "clean" ? FLUSH_DURATION_SEC : PRIME_DURATION_SEC;
     let failures = 0;
@@ -246,7 +269,10 @@ export function adminMaintenanceView({ host, setMeta }) {
     actions.className = "maint-slot__actions";
 
     const prime = actionBtn("Prime");
-    prime.disabled = !slot.ingredientId;
+    if (!slot.ingredientId) {
+      prime.disabled = true;
+      prime.dataset.alwaysDisabled = "1";
+    }
     prime.addEventListener("click", () =>
       runEndpoint(
         "/api/maintenance/run",
@@ -257,7 +283,10 @@ export function adminMaintenanceView({ host, setMeta }) {
     actions.appendChild(prime);
 
     const flush = actionBtn("Flush", { tone: "warn" });
-    flush.disabled = !slot.ingredientId;
+    if (!slot.ingredientId) {
+      flush.disabled = true;
+      flush.dataset.alwaysDisabled = "1";
+    }
     flush.addEventListener("click", () =>
       runEndpoint(
         "/api/maintenance/run",
@@ -270,7 +299,10 @@ export function adminMaintenanceView({ host, setMeta }) {
     const calBtn = actionBtn(calibrated ? "Recalibrate" : "Calibrate", {
       tone: "primary",
     });
-    calBtn.disabled = !slot.ingredientId;
+    if (!slot.ingredientId) {
+      calBtn.disabled = true;
+      calBtn.dataset.alwaysDisabled = "1";
+    }
     calBtn.addEventListener("click", () => openCalibrate(slot));
     actions.appendChild(calBtn);
 
@@ -314,15 +346,20 @@ export function adminMaintenanceView({ host, setMeta }) {
     element.appendChild(renderSlotList());
     element.appendChild(renderReference());
     updateMeta();
+    // Apply lock state to the freshly-rendered buttons; otherwise a re-render
+    // during a remote pour would briefly enable everything until the next
+    // status event arrives.
+    refreshDisabled();
   }
 
   // --- Calibration modal ---
-  // Two-step flow: (1) pour the target volume, (2) user enters the actual
-  // measured volume → backend computes new rate.
+  // Run the pump for a fixed time, let the on-board scale weigh the result,
+  // and persist (grams / seconds) → oz/sec. The admin doesn't enter a
+  // number; they just place a cup on the platform and confirm the result.
 
   function openCalibrate(slot) {
     if (calibrateModalEl) calibrateModalEl.remove();
-    let phase = "ready"; // ready → pouring → measuring → done
+    let phase = "ready"; // ready → running → result
 
     const overlay = document.createElement("div");
     overlay.className = "admin-picker";
@@ -347,7 +384,7 @@ export function adminMaintenanceView({ host, setMeta }) {
 
     overlay.appendChild(panel);
     overlay.addEventListener("click", (e) => {
-      if (e.target === overlay && phase !== "pouring") close();
+      if (e.target === overlay && phase !== "running") close();
     });
 
     function close() {
@@ -360,7 +397,7 @@ export function adminMaintenanceView({ host, setMeta }) {
       body.innerHTML = "";
       const p1 = document.createElement("p");
       p1.className = "maint-cal__copy";
-      p1.textContent = `Place an empty measuring cup under slot ${slot.slot}. We'll dispense ~${CALIBRATE_TARGET_OZ.toFixed(2)} oz at the current rate. After it stops, enter how much actually came out.`;
+      p1.textContent = `Place an empty cup on the platform under slot ${slot.slot}. We'll run the pump for ${CALIBRATE_DURATION_SEC} seconds and weigh what comes out.`;
       body.appendChild(p1);
 
       actions.innerHTML = "";
@@ -374,11 +411,11 @@ export function adminMaintenanceView({ host, setMeta }) {
     }
 
     async function runPour() {
-      phase = "pouring";
+      phase = "running";
       body.innerHTML = "";
       const status = document.createElement("p");
       status.className = "maint-cal__copy";
-      status.textContent = "Pouring… do not move the cup.";
+      status.textContent = `Pouring for ${CALIBRATE_DURATION_SEC} seconds… don't touch the cup.`;
       body.appendChild(status);
       actions.innerHTML = "";
       const wait = actionBtn("Pouring…");
@@ -387,82 +424,51 @@ export function adminMaintenanceView({ host, setMeta }) {
       actions.appendChild(wait);
 
       // Lock the underlying maintenance card too — a stray prime tap during
-      // the calibration pour would queue a second hardware command and
-      // skew the volume the admin is about to measure.
+      // the calibration pour would jog the platform and skew the weight.
       setBusy(true);
       try {
-        await postJSON("/api/maintenance/calibrate-pour", {
+        const result = await postJSON("/api/maintenance/calibrate-measure", {
           slot: slot.slot,
-          targetOz: CALIBRATE_TARGET_OZ,
+          durationSec: CALIBRATE_DURATION_SEC,
         });
-        // Refresh inventory cache so the per-slot bottle level reflects what
-        // just left the pump before the admin moves on.
         try {
           inventory = await getJSON("/api/inventory");
           await reloadInventory();
         } catch {}
         setBusy(false);
-        renderMeasure();
+        renderResult(result);
       } catch (e) {
         console.error(e);
         setBusy(false);
-        showToast(`Calibration pour failed — ${e.message}`);
+        showToast(`Calibration failed — ${e.message}`);
         close();
       }
     }
 
-    function renderMeasure() {
-      phase = "measuring";
+    function renderResult(result) {
+      phase = "result";
       body.innerHTML = "";
       const copy = document.createElement("p");
       copy.className = "maint-cal__copy";
-      copy.textContent = `Measure the cup. How many ounces actually came out? (Target was ${CALIBRATE_TARGET_OZ.toFixed(2)} oz.)`;
+      copy.textContent = `Dispensed ${result.grams.toFixed(1)} g in ${result.durationSec} s.`;
       body.appendChild(copy);
 
-      let value = CALIBRATE_TARGET_OZ;
-      const stepper = document.createElement("div");
-      stepper.className = "capacity-editor__stepper";
-
-      const minus = document.createElement("button");
-      minus.type = "button";
-      minus.className = "shot-step tappable";
-      minus.textContent = "−";
-      const readout = document.createElement("div");
-      readout.className = "capacity-editor__readout";
-      const plus = document.createElement("button");
-      plus.type = "button";
-      plus.className = "shot-step tappable";
-      plus.textContent = "+";
-
-      function paint() {
-        readout.textContent = `${value.toFixed(2)} oz`;
-        minus.disabled = value <= 0.1;
-        plus.disabled = value >= 6.0;
-      }
-      minus.addEventListener("click", () => {
-        value = Math.max(0.1, Number((value - 0.05).toFixed(2)));
-        paint();
-      });
-      plus.addEventListener("click", () => {
-        value = Math.min(6.0, Number((value + 0.05).toFixed(2)));
-        paint();
-      });
-      stepper.append(minus, readout, plus);
-      paint();
-      body.appendChild(stepper);
+      const rate = document.createElement("div");
+      rate.className = "maint-cal__rate";
+      rate.textContent = formatRate(result.ozPerSec);
+      body.appendChild(rate);
 
       actions.innerHTML = "";
-      const repour = actionBtn("Re-pour");
+      const repour = actionBtn("Re-run");
       repour.dataset.alwaysEnabled = "1";
       repour.addEventListener("click", runPour);
       const save = actionBtn("Save calibration", { tone: "primary" });
       save.dataset.alwaysEnabled = "1";
       save.addEventListener("click", async () => {
         try {
-          await postJSON("/api/maintenance/calibrate-record", {
+          await postJSON("/api/maintenance/calibrate-save", {
             slot: slot.slot,
-            targetOz: CALIBRATE_TARGET_OZ,
-            actualOz: value,
+            ozPerSec: result.ozPerSec,
           });
           calibration = await getJSON("/api/calibration");
           await reloadCalibration();
@@ -487,12 +493,22 @@ export function adminMaintenanceView({ host, setMeta }) {
 
   function mount() {
     load();
+    let lastStatus = getMachineStatus().status;
+    unsubMachine = onMachineStatus((s) => {
+      if (s.status === lastStatus) return;
+      lastStatus = s.status;
+      refreshDisabled();
+    });
   }
 
   function unmount() {
     if (calibrateModalEl) {
       calibrateModalEl.remove();
       calibrateModalEl = null;
+    }
+    if (unsubMachine) {
+      unsubMachine();
+      unsubMachine = null;
     }
   }
 

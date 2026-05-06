@@ -61,7 +61,7 @@ All screens: 800 × 480. All screens except idle have the back button (36×36 ci
 - Matched substring highlighted in the category's accent color (background 25% opacity, text brighter stop)
 - Tap result → navigate to detail for that drink
 - Tap × → clear query, show empty state ("type to search")
-- Tap back → return to category
+- Tap back → previous screen (history-stack pop)
 - No results state: "No drinks match 'xyz'. Try an ingredient like 'lime' or 'gin'."
 
 **Keyboard:**
@@ -86,8 +86,8 @@ All screens: 800 × 480. All screens except idle have the back button (36×36 ci
 
 **Behavior:**
 - Tap drink card → navigate to detail
-- Tap back button → return to category
-- Tap pagination dot → swap this screen's contents to show that category's drinks (same screen, different category — don't re-navigate)
+- Tap back button → previous screen (history-stack pop)
+- Tap pagination dot → swap this screen's contents to show that category's drinks (same screen, different category — don't re-navigate, don't push onto history)
 - Active pagination dot is a 20px bar in the current category's accent color; others are 8px bars at 15% white opacity
 - Each card: centered glass SVG (or photo eventually), drink name, ingredient list
 
@@ -114,7 +114,7 @@ All screens: 800 × 480. All screens except idle have the back button (36×36 ci
 - Time estimate recalculates based on strength (stronger = slightly longer pour)
 - Pour button → send `POUR` message to backend via WebSocket → navigate to pouring
 - If any required ingredient is missing, show a non-blocking warning above the button: "⚠ Out of vermouth — this drink is unavailable" and disable the button
-- Back button → return to drink-list for this drink's category (preserve category context)
+- Back button → previous screen (history-stack pop — drink-list, search, idle, etc.)
 
 **State dependencies:** `appState.selectedDrink`, `appState.pendingOrder`
 
@@ -138,7 +138,7 @@ All screens: 800 × 480. All screens except idle have the back button (36×36 ci
 - **Cancel requires a 2-second hold**, not a tap — prevents accidental cancellation mid-pour
   - On `touchstart`: start a 2000ms timer, animate a progress ring around the cancel label
   - On `touchend` before timer fires: cancel the timer, reset the ring
-  - On timer fire: send `POUR_CANCEL` to backend, navigate back to detail
+  - On timer fire: send `POUR_CANCEL` to backend; pouring pops off the history stack (regular drinks land on detail, shots rewind two entries to the shotPicker)
 - On `POUR_COMPLETE`: navigate to complete
 - On `POUR_ERROR`: show error modal, offer retry or return to detail
 

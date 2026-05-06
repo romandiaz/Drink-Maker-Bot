@@ -1,7 +1,10 @@
 // Header component: station header used across every screen except idle-only moments.
 // Composes three slots — left (back button + titles), center (search pill), right (ready/count/custom).
 
-import { CHEVRON_LEFT_SVG, SEARCH_SVG, CLOSE_SVG } from "../icons.js";
+import { CHEVRON_LEFT_SVG, SEARCH_SVG, CLOSE_SVG, COG_SVG } from "../icons.js";
+import { getMachineStatus, onMachineStatus } from "../machine-status.js";
+import { goBack } from "../app.js";
+import { requestAdminAccess } from "../admin-auth.js";
 
 export function backButton(onBack) {
   const btn = document.createElement("button");
@@ -9,15 +12,67 @@ export function backButton(onBack) {
   btn.className = "back-btn tappable";
   btn.setAttribute("aria-label", "Go back");
   btn.innerHTML = CHEVRON_LEFT_SVG;
-  if (onBack) btn.addEventListener("click", onBack);
+  // Default behaviour is "walk one entry back on the history stack". Screens
+  // that need a different action (e.g. dismiss a modal) can pass their own.
+  btn.addEventListener("click", onBack || (() => goBack()));
   return btn;
 }
+
+// Reflects the live server-side machine state — every tablet sees the same
+// status, even ones that didn't initiate a pour. Indicators across all
+// mounted screens update together; orphaned ones are dropped from the
+// registry on the next tick after they leave the DOM.
+const indicatorRegistry = new Set();
+
+function applyStatus(el, status) {
+  const dot = el.querySelector(".ready-dot");
+  const label = el.querySelector(".ready-label");
+  if (!dot || !label) return;
+  el.classList.remove("ready-indicator--idle", "ready-indicator--busy");
+  if (status.status === "idle") {
+    el.classList.add("ready-indicator--idle");
+    label.textContent = "Ready";
+  } else {
+    el.classList.add("ready-indicator--busy");
+    label.textContent = status.status === "pouring" ? "Pouring" : "Maintenance";
+  }
+}
+
+onMachineStatus((status) => {
+  for (const el of indicatorRegistry) {
+    if (!el.isConnected) {
+      indicatorRegistry.delete(el);
+      continue;
+    }
+    applyStatus(el, status);
+  }
+});
 
 export function readyIndicator() {
   const el = document.createElement("div");
   el.className = "ready-indicator";
   el.innerHTML = `<span class="ready-dot" aria-hidden="true"></span><span class="ready-label">Ready</span>`;
+  applyStatus(el, getMachineStatus());
+  indicatorRegistry.add(el);
   return el;
+}
+
+// Reusable cog button that opens the PIN-gated admin flow. Same visual on
+// every screen that surfaces it (idle, category) so the entry point reads
+// the same wherever the user finds it.
+export function adminButton() {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "admin-btn tappable";
+  btn.setAttribute("aria-label", "Admin");
+  btn.innerHTML = COG_SVG;
+  btn.addEventListener("click", (e) => {
+    // Idle has a tap-anywhere → category handler on the screen root; stop
+    // propagation so the gear tap doesn't also navigate behind the modal.
+    e.stopPropagation();
+    requestAdminAccess();
+  });
+  return btn;
 }
 
 export function searchPill({ onTap, placeholder = "Search drinks..." } = {}) {
@@ -96,7 +151,7 @@ function leftTitles({ eyebrow, eyebrowAccent, title }) {
 /**
  * Build the station header. Slots:
  *   back       — show a 36×36 back button (default true)
- *   onBack     — click handler for back button
+ *   onBack     — click handler for back button (defaults to goBack — i.e. pop the history stack)
  *   eyebrow    — small uppercase label above title (e.g. "STATION 01", "CATEGORY 01")
  *   eyebrowAccent — color for the eyebrow (e.g. category accent var)
  *   title      — screen title (e.g. "Choose a category", "The Classics")

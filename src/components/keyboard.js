@@ -92,5 +92,40 @@ export function keyboard({ onLetter, onBackspace, extended = false } = {}) {
     wrap.appendChild(r);
   }
 
+  // Mirror physical-keyboard input through the same callbacks the on-screen
+  // buttons use, so a real USB/Bluetooth keyboard works at the dev desk.
+  // Self-removes once the wrap is detached from the DOM.
+  let everConnected = false;
+  function handlePhysicalKey(e) {
+    if (wrap.isConnected) {
+      everConnected = true;
+    } else {
+      if (everConnected) document.removeEventListener("keydown", handlePhysicalKey);
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+
+    const key = e.key;
+    if (key === "Backspace") {
+      e.preventDefault();
+      onBackspace?.();
+      return;
+    }
+    if (/^[a-zA-Z]$/.test(key)) {
+      e.preventDefault();
+      // Sticky on-screen shift overrides the physical case; otherwise the
+      // browser already encoded physical-shift state into `key`.
+      onLetter?.(shifted ? key.toUpperCase() : key);
+      return;
+    }
+    if (extended && (key === " " || key === "." || key === "'")) {
+      e.preventDefault();
+      onLetter?.(key);
+    }
+  }
+  document.addEventListener("keydown", handlePhysicalKey);
+
   return wrap;
 }

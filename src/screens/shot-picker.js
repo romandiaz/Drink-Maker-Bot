@@ -85,7 +85,6 @@ export function shotPicker() {
     headerSlot.innerHTML = "";
     headerSlot.appendChild(
       header({
-        onBack: () => navigate("category", {}, "pop"),
         eyebrow: "Category 05",
         eyebrowAccent: "var(--accent-shots)",
         title: "The Shots",

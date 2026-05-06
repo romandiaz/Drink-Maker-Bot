@@ -1,10 +1,15 @@
-import { drinks, getCategoryById } from "../drinks.js";
+import { drinks, getCategoryById, isDrinkEnabled } from "../drinks.js";
 import { ingredientName } from "../ingredients.js";
 import { isDrinkPourable, bottleStatus } from "../inventory-store.js";
-import { reloadInventory, reloadDrinks } from "../app.js";
+import { reloadInventory, reloadDrinks, reloadCategoriesConfig } from "../app.js";
+import { isCategoryEnabled } from "../category-store.js";
 import { getJSON } from "../api.js";
 import { showToast } from "../components/toast.js";
 import { createDonut } from "../components/donut.js";
+
+// The dashboard's recipe + suggestion counts mirror what guests see, so they
+// should ignore drinks the admin has hidden — same with disabled categories.
+const isVisibleDrink = (d) => isDrinkEnabled(d) && isCategoryEnabled(d.category);
 
 // Dashboard view for the admin shell. Aggregates machine + inventory state
 // alongside historical pour stats from /api/stats. Each card pairs a donut
@@ -248,8 +253,10 @@ function recipeSuggestion(inventory) {
   );
   const unassignedSlotCount = slots.filter((s) => !s.ingredientId).length;
 
-  const blockedDrinks = drinks.filter((d) =>
-    d.ingredients.some((i) => !assigned.has(i.name)),
+  const blockedDrinks = drinks.filter(
+    (d) =>
+      isVisibleDrink(d) &&
+      d.ingredients.some((i) => !assigned.has(i.name)),
   );
   if (blockedDrinks.length === 0) return null;
 
@@ -288,11 +295,13 @@ function recipeSuggestion(inventory) {
   // one used in the fewest recipes overall (least valuable to keep).
   const usedByPourable = new Set();
   for (const d of drinks) {
+    if (!isVisibleDrink(d)) continue;
     if (!isDrinkPourable(d)) continue;
     for (const i of d.ingredients) usedByPourable.add(i.name);
   }
   const usedByAnyDrink = new Map();
   for (const d of drinks) {
+    if (!isVisibleDrink(d)) continue;
     for (const i of d.ingredients) {
       usedByAnyDrink.set(i.name, (usedByAnyDrink.get(i.name) || 0) + 1);
     }
@@ -321,6 +330,7 @@ function missingBottleNames(inventory) {
   );
   const demand = new Map();
   for (const d of drinks) {
+    if (!isVisibleDrink(d)) continue;
     for (const i of d.ingredients) {
       if (!assigned.has(i.name)) {
         demand.set(i.name, (demand.get(i.name) || 0) + 1);
@@ -333,8 +343,9 @@ function missingBottleNames(inventory) {
 }
 
 function recipesCard(inventory, onOpenRecipes, onOpenInventory) {
-  const totalRecipes = drinks.length;
-  const pourableCount = drinks.filter((d) => isDrinkPourable(d)).length;
+  const visible = drinks.filter(isVisibleDrink);
+  const totalRecipes = visible.length;
+  const pourableCount = visible.filter((d) => isDrinkPourable(d)).length;
   const blocked = totalRecipes - pourableCount;
 
   // Outer is a div (not a button) so we can nest a real button for the
@@ -378,7 +389,7 @@ function recipesCard(inventory, onOpenRecipes, onOpenInventory) {
   } else {
     const primary = document.createElement("div");
     primary.className = "dash-shortcut__primary";
-    primary.textContent = `${blocked} blocked`;
+    primary.textContent = `${blocked} Locked recipes`;
     text.appendChild(primary);
 
     let suggestionText = recipeSuggestion(inventory);
@@ -472,7 +483,7 @@ export function adminDashboardView({ setMeta, onSwitchTab }) {
     try {
       // Refresh shared caches so the inventory + recipe shortcut counts
       // match what the Inventory and Recipes tabs would show this instant.
-      await Promise.all([reloadInventory(), reloadDrinks()]);
+      await Promise.all([reloadInventory(), reloadDrinks(), reloadCategoriesConfig()]);
       const [stats, inventory] = await Promise.all([
         getJSON("/api/stats"),
         getJSON("/api/inventory"),

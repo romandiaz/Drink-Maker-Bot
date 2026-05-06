@@ -9,7 +9,13 @@ import { serialPour } from "./serialPour.js";
 import { openSerial } from "./serial.js";
 import { loadInventory, saveInventory } from "./inventory.js";
 import * as drinksStore from "./drinks-store.js";
-import { stats as pourStats } from "./pour-history.js";
+import * as categoriesStore from "./categories-store.js";
+import * as submissionsStore from "./submissions-store.js";
+import {
+  stats as pourStats,
+  list as pourList,
+  clear as pourClear,
+} from "./pour-history.js";
 import {
   loadCalibration,
   saveCalibration,
@@ -17,9 +23,17 @@ import {
 } from "./calibration.js";
 import {
   runTimedPump,
-  runCalibrationPour,
-  recordCalibrationResult,
+  runCalibrationMeasure,
+  saveCalibrationResult,
 } from "./maintenance.js";
+import {
+  acquire as acquireMachine,
+  updateJob as updateMachineJob,
+  subscribe as subscribeMachine,
+  stateMessage as machineStateMessage,
+} from "./machine-state.js";
+import { verifyPin } from "./admin-pin.js";
+import * as network from "./network.js";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -121,9 +135,92 @@ async function handleApi(req, res, urlPath) {
     }
     return true;
   }
+  // Cheap toggle endpoint — avoids re-validating the entire drink record on
+  // an enable/disable flip. Body: { enabled: bool }.
+  const drinkEnabledMatch = urlPath.match(/^\/api\/drinks\/([^/]+)\/enabled$/);
+  if (drinkEnabledMatch && req.method === "PUT") {
+    try {
+      const body = await readJsonBody(req);
+      sendJson(res, 200, await drinksStore.setEnabled(drinkEnabledMatch[1], body.enabled));
+    } catch (e) {
+      sendJson(res, e.message === "not found" ? 404 : 400, { error: e.message });
+    }
+    return true;
+  }
+
+  if (urlPath === "/api/categories" && req.method === "GET") {
+    sendJson(res, 200, await categoriesStore.load());
+    return true;
+  }
+  if (urlPath === "/api/categories" && req.method === "PUT") {
+    try {
+      const body = await readJsonBody(req);
+      sendJson(res, 200, await categoriesStore.save(body));
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
 
   if (urlPath === "/api/stats" && req.method === "GET") {
     sendJson(res, 200, await pourStats());
+    return true;
+  }
+
+  if (urlPath === "/api/history" && req.method === "GET") {
+    sendJson(res, 200, await pourList());
+    return true;
+  }
+  if (urlPath === "/api/history" && req.method === "DELETE") {
+    sendJson(res, 200, await pourClear());
+    return true;
+  }
+
+  if (urlPath === "/api/submissions" && req.method === "GET") {
+    sendJson(res, 200, await submissionsStore.load());
+    return true;
+  }
+  if (urlPath === "/api/submissions" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      sendJson(res, 201, await submissionsStore.create(body));
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
+  const submissionMatch = urlPath.match(/^\/api\/submissions\/([^/]+)$/);
+  if (submissionMatch && req.method === "DELETE") {
+    try {
+      sendJson(res, 200, await submissionsStore.remove(submissionMatch[1]));
+    } catch (e) {
+      sendJson(res, e.message === "not found" ? 404 : 400, { error: e.message });
+    }
+    return true;
+  }
+  const submissionPromoteMatch = urlPath.match(/^\/api\/submissions\/([^/]+)\/promote$/);
+  if (submissionPromoteMatch && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const submission = await submissionsStore.get(submissionPromoteMatch[1]);
+      if (!submission) {
+        sendJson(res, 404, { error: "not found" });
+        return true;
+      }
+      // Promotion folds the admin's edits (category, glass, color, etc.) into
+      // the guest-supplied name + ingredients, then drops the submission.
+      // drinksStore.create runs the full validator so a malformed promote
+      // payload bounces with 400 before we delete the original.
+      const drink = await drinksStore.create({
+        ...body,
+        name: body.name || submission.name,
+        ingredients: body.ingredients?.length ? body.ingredients : submission.ingredients,
+      });
+      await submissionsStore.remove(submission.id);
+      sendJson(res, 201, drink);
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
     return true;
   }
 
@@ -160,39 +257,151 @@ async function handleApi(req, res, urlPath) {
       if (!Number.isFinite(durationSec) || durationSec <= 0 || durationSec > 60) {
         throw new Error("invalid duration");
       }
-      await runTimedPump(slot, durationSec * 1000);
-      sendJson(res, 200, { ok: true, mode, slot, durationSec });
-    } catch (e) {
-      sendJson(res, 400, { error: e.message });
-    }
-    return true;
-  }
-
-  if (urlPath === "/api/maintenance/calibrate-pour" && req.method === "POST") {
-    try {
-      const body = await readJsonBody(req);
-      const slot = Number(body.slot);
-      const targetOz = Number(body.targetOz);
-      if (!Number.isInteger(slot) || slot < 1) throw new Error("invalid slot");
-      if (!Number.isFinite(targetOz) || targetOz <= 0 || targetOz > 8) {
-        throw new Error("invalid target");
+      const release = acquireMachine({ kind: "maintenance", mode, slot });
+      if (!release) {
+        sendJson(res, 409, { error: "machine busy" });
+        return true;
       }
-      await runCalibrationPour(slot, targetOz);
-      sendJson(res, 200, { ok: true, slot, targetOz });
+      try {
+        await runTimedPump(slot, durationSec * 1000);
+        sendJson(res, 200, { ok: true, mode, slot, durationSec });
+      } finally {
+        release();
+      }
     } catch (e) {
       sendJson(res, 400, { error: e.message });
     }
     return true;
   }
 
-  if (urlPath === "/api/maintenance/calibrate-record" && req.method === "POST") {
+  if (urlPath === "/api/maintenance/calibrate-measure" && req.method === "POST") {
     try {
       const body = await readJsonBody(req);
       const slot = Number(body.slot);
-      const targetOz = Number(body.targetOz);
-      const actualOz = Number(body.actualOz);
+      const durationSec = Number(body.durationSec);
       if (!Number.isInteger(slot) || slot < 1) throw new Error("invalid slot");
-      sendJson(res, 200, await recordCalibrationResult(slot, targetOz, actualOz));
+      const release = acquireMachine({ kind: "maintenance", mode: "calibrate", slot });
+      if (!release) {
+        sendJson(res, 409, { error: "machine busy" });
+        return true;
+      }
+      try {
+        const result = await runCalibrationMeasure(slot, durationSec);
+        sendJson(res, 200, { ok: true, slot, ...result });
+      } finally {
+        release();
+      }
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
+
+  if (urlPath === "/api/admin/verify-pin" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const ok = await verifyPin(body && body.pin);
+      if (!ok) {
+        sendJson(res, 401, { ok: false, error: "incorrect pin" });
+        return true;
+      }
+      sendJson(res, 200, { ok: true });
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
+
+  // Network admin endpoints — wrap nmcli for the admin Network tab. These
+  // intentionally aren't PIN-gated at the HTTP layer (matching the existing
+  // admin endpoints), which assumes the only client on the network is the
+  // kiosk itself. When the phone-as-client work lands these will need stricter
+  // gating, since guest devices will share the LAN with the Pi in host mode.
+  if (urlPath === "/api/network/status" && req.method === "GET") {
+    try {
+      sendJson(res, 200, await network.getStatus());
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return true;
+  }
+  if (urlPath === "/api/network/scan" && req.method === "GET") {
+    try {
+      sendJson(res, 200, await network.scan());
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return true;
+  }
+  if (urlPath === "/api/network/saved" && req.method === "GET") {
+    try {
+      sendJson(res, 200, await network.listSaved());
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return true;
+  }
+  const networkForgetMatch = urlPath.match(/^\/api\/network\/saved\/([^/]+)$/);
+  if (networkForgetMatch && req.method === "DELETE") {
+    try {
+      await network.forget(decodeURIComponent(networkForgetMatch[1]));
+      sendJson(res, 200, { ok: true });
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
+  if (urlPath === "/api/network/mode" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      await network.setMode(body && body.mode);
+      sendJson(res, 200, { ok: true });
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
+  if (urlPath === "/api/network/connect" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      if (body && body.name) {
+        await network.connectExisting(body.name);
+      } else if (body && body.ssid) {
+        await network.connectNew(body.ssid, body.password || "");
+      } else {
+        throw new Error("provide name or ssid");
+      }
+      sendJson(res, 200, { ok: true });
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
+  if (urlPath === "/api/network/hotspot" && req.method === "GET") {
+    try {
+      sendJson(res, 200, await network.getHotspotConfig());
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return true;
+  }
+  if (urlPath === "/api/network/hotspot" && req.method === "PUT") {
+    try {
+      const body = await readJsonBody(req);
+      await network.setHotspotConfig(body || {});
+      sendJson(res, 200, { ok: true });
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return true;
+  }
+
+  if (urlPath === "/api/maintenance/calibrate-save" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const slot = Number(body.slot);
+      const ozPerSec = Number(body.ozPerSec);
+      sendJson(res, 200, await saveCalibrationResult(slot, ozPerSec));
     } catch (e) {
       sendJson(res, 400, { error: e.message });
     }
@@ -232,8 +441,29 @@ const server = http.createServer(async (req, res) => {
 
 const wss = new WebSocketServer({ server, path: "/ws" });
 
+function broadcast(event) {
+  const json = JSON.stringify(event);
+  for (const client of wss.clients) {
+    if (client.readyState === client.OPEN) client.send(json);
+  }
+}
+
+// Mirror machine-state changes to every connected client. The store guards
+// against double-emits so we don't need to dedupe here.
+subscribeMachine(() => broadcast(machineStateMessage()));
+
 wss.on("connection", (ws) => {
+  // Hand the new client the current state immediately, otherwise its header
+  // sits at "Ready" through the first transition no matter what's actually
+  // happening.
+  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(machineStateMessage()));
+
+  // Only the connection that started a pour can cancel it (cancel UI only
+  // exists on its own pouring screen). releasePour is the machine-state
+  // release callback for the active pour, separate from the pour driver's
+  // own cancel handle.
   let cancelPour = null;
+  let releasePour = null;
 
   ws.on("message", (data) => {
     let msg;
@@ -243,9 +473,36 @@ wss.on("connection", (ws) => {
       return;
     }
     if (msg.type === "POUR") {
-      if (cancelPour) cancelPour();
+      // Reject if anything else is running — including a maintenance routine
+      // kicked off via HTTP from another tablet. The client navigates back
+      // to detail on POUR_REJECTED.
+      const release = acquireMachine({ kind: "pour", drinkId: msg.drinkId });
+      if (!release) {
+        if (ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify({ type: "POUR_REJECTED", reason: "busy" }));
+        }
+        return;
+      }
+      releasePour = release;
       cancelPour = pour(msg, (event) => {
+        // Pour progress reaches the originating tablet (drives its progress
+        // bar) AND the shared machine-state job (drives every other tablet's
+        // header). Terminal events release the lock.
+        if (event.type === "POUR_PROGRESS") {
+          updateMachineJob({ progress: event.pct, step: event.step });
+        }
         if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(event));
+        if (
+          event.type === "POUR_COMPLETE" ||
+          event.type === "POUR_CANCELLED" ||
+          event.type === "POUR_ERROR"
+        ) {
+          if (releasePour) {
+            releasePour();
+            releasePour = null;
+          }
+          cancelPour = null;
+        }
       });
     } else if (msg.type === "POUR_CANCEL") {
       if (cancelPour) {
@@ -258,6 +515,13 @@ wss.on("connection", (ws) => {
   ws.on("close", () => {
     if (cancelPour) cancelPour();
     cancelPour = null;
+    // The pour driver normally releases via the terminal event above, but if
+    // the socket dies mid-pour the cancel() may emit POUR_CANCELLED to a
+    // closed socket — release here too as a backstop. Idempotent.
+    if (releasePour) {
+      releasePour();
+      releasePour = null;
+    }
   });
 });
 

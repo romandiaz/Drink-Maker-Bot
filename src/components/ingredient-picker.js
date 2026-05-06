@@ -2,13 +2,29 @@ import { allIngredientIds, ingredientName } from "../ingredients.js";
 import { textInputModal } from "./text-input-modal.js";
 import { slugify } from "../slug.js";
 
-// Full-screen overlay that picks one ingredient ID (or null to empty a slot).
-// Tap outside the panel, or select an option, to dismiss. `current` is the
-// currently-assigned ID and gets a highlighted border. The "+ New ingredient"
-// tile opens a text-input modal so users can introduce ingredient IDs that
-// aren't referenced by any existing drink or slot.
+// Full-screen overlay that picks one ingredient ID. Tap outside the panel, or
+// select an option, to dismiss. `current` is the currently-assigned ID and
+// gets a highlighted border.
+//
+// Defaults match the admin flow (full ingredient catalog, "+ New" tile, null
+// option to clear a slot). Pass `ids` / `allowNew` / `allowEmpty` / `title`
+// to tailor it for non-admin uses — e.g. the guest "Build your own" screen
+// only wants loaded ingredients and no way to invent new ones on the fly.
 
-export function ingredientPicker({ current, onPick, onCancel }) {
+export function ingredientPicker({
+  current,
+  onPick,
+  onCancel,
+  ids,
+  allowNew = true,
+  allowEmpty = true,
+  title = "Assign ingredient",
+  disabledIds,
+} = {}) {
+  // Set of ingredient IDs that should render but be unselectable — used by
+  // the build-your-own flow to grey out ingredients already in the recipe so
+  // the user can't accidentally double-add the same bottle.
+  const disabled = new Set(disabledIds || []);
   const overlay = document.createElement("div");
   overlay.className = "admin-picker";
   overlay.addEventListener("click", (e) => {
@@ -21,11 +37,11 @@ export function ingredientPicker({ current, onPick, onCancel }) {
   panel.setAttribute("aria-modal", "true");
   panel.setAttribute("aria-labelledby", "admin-picker-title");
 
-  const title = document.createElement("div");
-  title.className = "admin-picker__title";
-  title.id = "admin-picker-title";
-  title.textContent = "Assign ingredient";
-  panel.appendChild(title);
+  const titleEl = document.createElement("div");
+  titleEl.className = "admin-picker__title";
+  titleEl.id = "admin-picker-title";
+  titleEl.textContent = title;
+  panel.appendChild(titleEl);
 
   const grid = document.createElement("div");
   grid.className = "admin-picker__grid";
@@ -46,14 +62,17 @@ export function ingredientPicker({ current, onPick, onCancel }) {
     overlay.appendChild(modal);
   }
 
-  const addNew = document.createElement("button");
-  addNew.type = "button";
-  addNew.className = "admin-picker__opt admin-picker__opt--new tappable";
-  addNew.textContent = "+ New ingredient";
-  addNew.addEventListener("click", openNewIngredient);
-  grid.appendChild(addNew);
+  if (allowNew) {
+    const addNew = document.createElement("button");
+    addNew.type = "button";
+    addNew.className = "admin-picker__opt admin-picker__opt--new tappable";
+    addNew.textContent = "+ New ingredient";
+    addNew.addEventListener("click", openNewIngredient);
+    grid.appendChild(addNew);
+  }
 
-  const options = [null, ...allIngredientIds()];
+  const baseIds = ids ?? allIngredientIds();
+  const options = allowEmpty ? [null, ...baseIds] : [...baseIds];
   for (const id of options) {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -61,7 +80,12 @@ export function ingredientPicker({ current, onPick, onCancel }) {
     btn.textContent = ingredientName(id);
     if (id === null) btn.classList.add("is-empty-opt");
     if (id === current) btn.classList.add("is-selected");
-    btn.addEventListener("click", () => onPick(id));
+    if (id !== null && disabled.has(id)) {
+      btn.classList.add("is-disabled");
+      btn.disabled = true;
+    } else {
+      btn.addEventListener("click", () => onPick(id));
+    }
     grid.appendChild(btn);
   }
   panel.appendChild(grid);

@@ -1199,8 +1199,26 @@ export function replaceDrinks(newDrinks) {
 }
 
 // Helper functions
+
+// `enabled` defaults true so legacy records and the seed list stay visible.
+// Only an explicit `false` hides a drink from the main UI. Admin tabs read
+// the raw `drinks` array so disabled drinks remain editable.
+export const isDrinkEnabled = (drink) => drink && drink.enabled !== false;
+
+// Main-UI helpers filter by `enabled` (and the live category-disabled set
+// pulled in here to avoid every call site importing the store). Imported
+// indirectly so this module stays consumable by the server too — see the
+// guard in lookupCategoryEnabled below.
+let categoryEnabledLookup = () => true;
+export function setCategoryEnabledLookup(fn) {
+  categoryEnabledLookup = typeof fn === "function" ? fn : () => true;
+}
+function isVisible(drink) {
+  return isDrinkEnabled(drink) && categoryEnabledLookup(drink.category);
+}
+
 export const getDrinksByCategory = (categoryId) =>
-  drinks.filter((d) => d.category === categoryId);
+  drinks.filter((d) => d.category === categoryId && isVisible(d));
 
 export const getDrinkById = (id) => drinks.find((d) => d.id === id);
 
@@ -1210,6 +1228,7 @@ export const searchDrinks = (query) => {
   const q = query.toLowerCase().trim();
   if (!q) return [];
   return drinks.filter((d) => {
+    if (!isVisible(d)) return false;
     const nameMatch = d.name.toLowerCase().includes(q);
     const ingredientMatch = d.ingredients.some((i) =>
       i.name.toLowerCase().includes(q)

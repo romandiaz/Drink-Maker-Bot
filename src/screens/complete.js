@@ -1,8 +1,8 @@
-import { navigate } from "../app.js";
+import { resetStack } from "../app.js";
 import { drinks, getDrinkById } from "../drinks.js";
 import { header } from "../components/header.js";
-import { glass } from "../components/glass.js";
-import { appState } from "../state.js";
+import { glass, layeredGlass } from "../components/glass.js";
+import { appState, setBuildDraft } from "../state.js";
 import { CHECK_SVG } from "../icons.js";
 import { formatByHand, formatGarnishProse, formatTopUpProse, joinList } from "../format.js";
 
@@ -38,7 +38,10 @@ export function complete(props = {}) {
 
   const glassWrap = document.createElement("div");
   glassWrap.className = "complete-glass";
-  glassWrap.appendChild(glass(drink, { width: 240 }));
+  // Match the pouring screen — custom drinks keep their layered visualization
+  // through to the cheers screen instead of falling back to a single fill.
+  const renderGlass = drink.isCustom ? layeredGlass : glass;
+  glassWrap.appendChild(renderGlass(drink, { width: 240 }));
   main.appendChild(glassWrap);
 
   const info = document.createElement("div");
@@ -91,10 +94,21 @@ export function complete(props = {}) {
   anotherBtn.className = "complete-btn complete-btn--primary tappable";
   anotherBtn.textContent = "Another";
   anotherBtn.addEventListener("click", () => {
+    // Reseed the stack so back from the next detail/shot/build screen lands
+    // on idle (or the shot picker, in the shot case) — not on the completed
+    // pour. Custom drinks aren't in drinks[], so detail can't open them;
+    // re-seed the shared build draft and route back to the build screen so
+    // the user can tweak and re-pour, or pour the exact same drink again.
+    // Seeding via appState (not stack-entry props) means a cancelled re-pour
+    // rewinds to whatever the user is currently editing, not back to the
+    // original seed.
     if (drink.isShot) {
-      navigate("shotDetail", { ingredientId: drink.ingredients[0].name });
+      resetStack("idle", "shotPicker", ["shotDetail", { ingredientId: drink.ingredients[0].name }]);
+    } else if (drink.isCustom) {
+      setBuildDraft({ name: drink.name, ingredients: drink.ingredients });
+      resetStack("idle", "buildYourOwn");
     } else {
-      navigate("detail", { drinkId: drink.id });
+      resetStack("idle", ["detail", { drinkId: drink.id }]);
     }
   });
 
@@ -102,7 +116,7 @@ export function complete(props = {}) {
   doneBtn.type = "button";
   doneBtn.className = "complete-btn complete-btn--secondary tappable";
   doneBtn.textContent = "Done";
-  doneBtn.addEventListener("click", () => navigate("idle", {}, "pop"));
+  doneBtn.addEventListener("click", () => resetStack("idle"));
 
   buttons.append(anotherBtn, doneBtn);
   footer.appendChild(buttons);
@@ -117,7 +131,7 @@ export function complete(props = {}) {
   function tick() {
     secondsLeft -= 1;
     if (secondsLeft <= 0) {
-      navigate("idle", {}, "pop");
+      resetStack("idle");
       return;
     }
     countdown.textContent = `Returning to idle in ${secondsLeft}s`;

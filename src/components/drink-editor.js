@@ -42,6 +42,11 @@ function makeDraft(drink) {
     garnish: drink?.garnish ?? null,
     topUp: drink?.topUp ?? null,
     needsIce: drink?.needsIce ?? false,
+    // Preserve the enabled flag through round-trip edits — editor doesn't
+    // expose a field for it (toggle lives on the recipe card), but the
+    // server's normalize defaults to true so omitting would re-enable a
+    // hidden drink on save.
+    enabled: drink?.enabled !== false,
     ingredients: (drink?.ingredients ?? [{ name: "gin", volumeOz: 1.5 }]).map((i) => ({ ...i })),
   };
 }
@@ -100,7 +105,7 @@ function deleteRow(onDelete) {
   return row;
 }
 
-export function drinkEditor({ drink, onSave, onCancel, onDelete }) {
+export function drinkEditor({ drink, onSave, onCancel, onDelete, title }) {
   const draft = makeDraft(drink);
 
   const overlay = document.createElement("div");
@@ -111,8 +116,9 @@ export function drinkEditor({ drink, onSave, onCancel, onDelete }) {
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-modal", "true");
   panel.setAttribute("aria-labelledby", "drink-editor-title");
+  const headingText = title ?? (drink ? "Edit drink" : "New drink");
   panel.appendChild(
-    head(drink ? "Edit drink" : "New drink", () => onCancel?.(), () => onSave?.(draft))
+    head(headingText, () => onCancel?.(), () => onSave?.(draft))
   );
 
   const body = document.createElement("div");

@@ -5,6 +5,38 @@
 import { drinks, shotIngredients } from "./drinks.js";
 import { assignedIngredientIds } from "./inventory-store.js";
 
+// Approximate liquid colors used by the layered-glass visualizer. Picked to
+// read at a glance on the kiosk's dark surface — saturated enough that small
+// bands stay visible, but tuned toward "what the bottle looks like" rather
+// than candy-bright. Spirit colors mirror shotIngredients[].color where they
+// overlap. Unknown IDs fall back to a neutral grey via ingredientColor().
+const INGREDIENT_COLORS = {
+  gin: "#D6E8EC",
+  vodka: "#E8EEF2",
+  whiskey: "#C98A3F",
+  rum: "#D4B07A",
+  tequila: "#E8E0A8",
+  campari: "#D13B2F",
+  vermouth: "#EDE0B0",
+  "sweet-vermouth": "#A8482F",
+  "triple-sec": "#F0D88A",
+  "simple-syrup": "#F2E8C9",
+  bitters: "#5A1F18",
+  soda: "#DCEEF6",
+  "lemon-juice": "#F4E690",
+  "lime-juice": "#C8DC75",
+  "orange-juice": "#F39C2A",
+  "cranberry-juice": "#B8203A",
+  "pineapple-juice": "#F6CB52",
+  "coconut-cream": "#F0EAD6",
+  orgeat: "#E8D9B0",
+  grenadine: "#C2113C",
+};
+
+export function ingredientColor(id) {
+  return INGREDIENT_COLORS[id] ?? "#888888";
+}
+
 // Friendly display names. IDs not in this map fall back to a title-cased
 // conversion of the ID itself (e.g. "simple-syrup" → "Simple Syrup").
 const PRETTY_NAMES = {

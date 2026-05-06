@@ -1,5 +1,6 @@
 import { navigate } from "../app.js";
 import { categories, getCategoryById, getDrinksByCategory } from "../drinks.js";
+import { isCategoryEnabled } from "../category-store.js";
 import { header } from "../components/header.js";
 import { glass } from "../components/glass.js";
 import { appState, setCurrentCategory, setSelectedDrink } from "../state.js";
@@ -85,6 +86,7 @@ function categoryTabs(currentId, onSelect) {
     // Shots is a secondary utility (own pill on the category screen), not a
     // peer of the cocktail categories — keep it out of the tab strip.
     if (cat.id === "shots") continue;
+    if (!isCategoryEnabled(cat.id)) continue;
     const tab = document.createElement("button");
     tab.type = "button";
     tab.className = "cat-tab tappable";
@@ -152,7 +154,6 @@ export function drinkList(props = {}) {
 
     element.appendChild(
       header({
-        onBack: () => navigate("category", {}, "pop"),
         eyebrow: `Category ${cat.number}`,
         eyebrowAccent: cat.accent,
         title: cat.name,

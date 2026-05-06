@@ -27,7 +27,15 @@ export function serialPour(order, send) {
     return () => {};
   }
 
-  const ingredients = adjustedIngredients(drink, order.strength, order.amount);
+  // skipIngredients carries names the user is pouring by hand because the
+  // machine isn't loaded for them (or the bottle is empty/low). Drop them
+  // from the timed pour, the consume() call, and the recorded history so we
+  // never command a slot we know can't deliver — and so the percentage math
+  // below is based on what the machine actually dispenses. Mirrors mockPour.
+  const skip = new Set(Array.isArray(order.skipIngredients) ? order.skipIngredients : []);
+  const ingredients = adjustedIngredients(drink, order.strength, order.amount).filter(
+    (i) => !skip.has(i.name)
+  );
   const totalVolume = totalVolumeOz(ingredients);
 
   let cancelled = false;
@@ -41,6 +49,10 @@ export function serialPour(order, send) {
       const ing = ingredients[stepIndex];
       const slotRow = inventory.slots.find((s) => s.ingredientId === ing.name);
       if (!slotRow) {
+        // Latch cancelled so a stale cancel() from the per-connection slot
+        // doesn't fire POUR_CANCELLED on the next POUR — that races with the
+        // newly-mounted pouring screen, which then bounces back to detail.
+        cancelled = true;
         send({
           type: "POUR_ERROR",
           code: "INGREDIENT_NOT_LOADED",
@@ -94,6 +106,7 @@ export function serialPour(order, send) {
       // so just exit before touching anything else.
       if (cancelled) return;
       if (response.startsWith("ERR")) {
+        cancelled = true;
         send({
           type: "POUR_ERROR",
           code: response,
@@ -129,6 +142,7 @@ export function serialPour(order, send) {
   })().catch((err) => {
     console.error("serialPour error:", err);
     if (!cancelled) {
+      cancelled = true;
       send({
         type: "POUR_ERROR",
         code: "SERIAL_ERROR",
