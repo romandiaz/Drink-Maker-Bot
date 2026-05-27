@@ -127,11 +127,15 @@ echo "==> Running npm install in $REPO_DIR..."
 
 # ---------- detect Arduino serial port -----------------------------------
 #
-# If a USB serial device is plugged in we bake SERIAL_PORT=<path> into the
-# systemd unit so the backend uses real hardware instead of mockPour.
-# With nothing connected we leave the env var unset and the backend stays
-# in mock mode. Pre-set SERIAL_PORT in the script's environment to skip
-# detection (handy for unattended re-installs).
+# Detection here only decides real-hardware vs. mock mode — it does NOT
+# pin a device path. When an Arduino-family device is present we bake
+# SERIAL_PORT=auto: the backend scans USB descriptors at runtime and binds
+# to the first matching VID, so the board re-enumerating under a different
+# /dev path (a known quirk of CH340/FTDI clones across reboots) just works
+# without re-running this script. An explicit path is baked in only when
+# several serial devices are present and the operator picks one, since
+# 'auto' can't disambiguate. Pass SERIAL_PORT in the environment to skip
+# detection (unattended re-installs).
 
 echo "==> Detecting Arduino serial port..."
 DETECTED_SERIAL_PORT=""
@@ -148,12 +152,22 @@ else
   case ${#serial_candidates[@]} in
     0)
       echo "    No serial device found at /dev/ttyACM* or /dev/ttyUSB*."
-      read -r -p "    Enter a path manually, or blank to skip (mock mode): " manual
-      DETECTED_SERIAL_PORT="$manual"
+      echo "    Default 'auto' lets the backend detect the Arduino by USB VID"
+      echo "    at runtime (recommended — board can be plugged in later)."
+      read -r -p "    Path / 'auto' / 'skip' [auto]: " manual
+      if [[ -z "$manual" || "$manual" == "auto" ]]; then
+        DETECTED_SERIAL_PORT="auto"
+      elif [[ "$manual" =~ ^[Ss](kip)?$ ]]; then
+        DETECTED_SERIAL_PORT=""
+      else
+        DETECTED_SERIAL_PORT="$manual"
+      fi
       ;;
     1)
-      DETECTED_SERIAL_PORT="${serial_candidates[0]}"
-      echo "    Found: $DETECTED_SERIAL_PORT"
+      echo "    Found: ${serial_candidates[0]}"
+      echo "    Using SERIAL_PORT=auto — the backend re-detects this board by"
+      echo "    USB VID at runtime, surviving re-enumeration to another path."
+      DETECTED_SERIAL_PORT="auto"
       ;;
     *)
       echo "    Multiple serial devices found:"
@@ -177,7 +191,9 @@ else
   esac
 fi
 
-if [[ -n "$DETECTED_SERIAL_PORT" ]]; then
+if [[ "$DETECTED_SERIAL_PORT" == "auto" ]]; then
+  echo "    Backend will use real hardware (runtime USB VID detection)"
+elif [[ -n "$DETECTED_SERIAL_PORT" ]]; then
   echo "    Backend will use real hardware on $DETECTED_SERIAL_PORT"
 else
   echo "    Backend will run in mock mode (no serial port set)"
@@ -192,6 +208,13 @@ if [[ -n "$DETECTED_SERIAL_PORT" ]]; then
   SERIAL_ENV_LINE="Environment=SERIAL_PORT=$DETECTED_SERIAL_PORT"
 fi
 
+# ExecStart points at scripts/run-server.sh, not node directly. The wrapper
+# keeps a node instance alive in a loop so the in-app Restart button (which
+# exits node cleanly) triggers a fast respawn without bouncing through
+# systemd's StartLimitBurst rate limit. systemd's Restart=always is kept as a
+# backstop for the unusual case where the wrapper itself dies.
+chmod +x "$REPO_DIR/scripts/run-server.sh"
+
 sudo tee /etc/systemd/system/bartender-kiosk.service >/dev/null <<EOF
 [Unit]
 Description=Bartender Kiosk backend
@@ -201,8 +224,9 @@ After=network.target
 Type=simple
 User=$KIOSK_USER
 WorkingDirectory=$REPO_DIR
-ExecStart=$NODE_BIN src/server/index.js
-Restart=on-failure
+Environment=NODE_BIN=$NODE_BIN
+ExecStart=/usr/bin/env bash $REPO_DIR/scripts/run-server.sh
+Restart=always
 RestartSec=3
 Environment=NODE_ENV=production
 $SERIAL_ENV_LINE

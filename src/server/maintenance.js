@@ -163,3 +163,78 @@ export async function saveCalibrationResult(slot, ozPerSec) {
   }
   return setSlotRate(slot, ozPerSec);
 }
+
+// --- Scale / Load Cell Calibration ---
+
+// Tares the scale to 0. The platform should be empty.
+export async function tareScale() {
+  if (isSerialReady()) {
+    const tareResp = await sendCommand("TARE", { timeoutMs: 5000 });
+    if (tareResp.startsWith("ERR")) throw new Error(`firmware: ${tareResp}`);
+  } else {
+    // Mock
+    await sleep(500);
+  }
+}
+
+// Reads the current weight on the scale.
+export async function readScale() {
+  if (isSerialReady()) {
+    const readResp = await sendCommand("READ", { timeoutMs: 5000 });
+    if (readResp.startsWith("ERR")) throw new Error(`firmware: ${readResp}`);
+    const m = readResp.match(/^WEIGHT\s+(-?\d+(?:\.\d+)?)/);
+    if (!m) throw new Error(`unexpected READ response: ${readResp}`);
+    return { grams: parseFloat(m[1]) };
+  } else {
+    // Mock: return a heavy weight (250g) so the complete screen doesn't
+    // instantly auto-dismiss in local development before it can be seen.
+    await sleep(200);
+    return { grams: 250.0 };
+  }
+}
+
+// Debounced scale read via firmware STABLE primitive. Returns once the
+// last N HX711 samples agree within `toleranceG`, so callers don't have
+// to debounce noisy single-sample READs themselves. `unstable: true`
+// means the firmware hit its internal timeout (e.g. user resting a hand
+// on the platform) — caller should treat this as "try again" rather than
+// a hard error. Firmware timeout is ~3s, so we allow 5s here for the
+// round-trip; longer than that means the serial line is wedged.
+export async function readScaleStable(samples = 3, toleranceG = 0.5) {
+  if (isSerialReady()) {
+    const cmd = `STABLE ${samples} ${toleranceG}`;
+    const resp = await sendCommand(cmd, { timeoutMs: 5000 });
+    if (resp.startsWith("ERR scale-unstable")) {
+      return { grams: null, unstable: true };
+    }
+    if (resp.startsWith("ERR")) throw new Error(`firmware: ${resp}`);
+    const m = resp.match(/^OK STABLE\s+(-?\d+(?:\.\d+)?)/);
+    if (!m) throw new Error(`unexpected STABLE response: ${resp}`);
+    return { grams: parseFloat(m[1]), unstable: false };
+  } else {
+    // Mock parity with readScale: heavy weight so dev complete-screen
+    // doesn't false-fire the glass-lift detector.
+    await sleep(200);
+    return { grams: 250.0, unstable: false };
+  }
+}
+
+// Calibrates the scale with a known mass.
+// The mass must be on the scale, and the scale must have been tared prior to placing it.
+export async function calibrateScale(knownGrams) {
+  if (!Number.isFinite(knownGrams) || knownGrams <= 0) {
+    throw new Error("invalid mass");
+  }
+
+  if (isSerialReady()) {
+    const calResp = await sendCommand(`CAL ${knownGrams}`, { timeoutMs: 10000 });
+    if (calResp.startsWith("ERR")) throw new Error(`firmware: ${calResp}`);
+    const m = calResp.match(/^OK CAL\s+(-?[0-9.]+)/);
+    if (!m) throw new Error(`unexpected CAL response: ${calResp}`);
+    return { factor: parseFloat(m[1]) };
+  } else {
+    // Mock
+    await sleep(2000);
+    return { factor: 1.05 };
+  }
+}

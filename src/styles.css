@@ -147,8 +147,11 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Back button — 36×36 visible circle with an invisible 44×44 touch area. */
-.back-btn {
+/* Back button — 36×36 visible circle with an invisible 44×44 touch area.
+   .home-btn shares the envelope so the admin header's home+back pair reads
+   as a matched set. */
+.back-btn,
+.home-btn {
   appearance: none;
   background: transparent;
   border: 1px solid var(--border-strong);
@@ -162,32 +165,40 @@ body {
   position: relative;
   flex: 0 0 auto;
 }
-.back-btn::before {
+.back-btn::before,
+.home-btn::before {
   content: "";
   position: absolute;
   inset: -4px;
 }
 .back-btn svg { width: 16px; height: 16px; display: block; }
+.home-btn svg { width: 16px; height: 16px; display: block; }
 
-/* Ready indicator */
+/* Ready indicator. A single top-down glass icon carries both axes:
+   - Outline color = machine status (green = idle, orange-pulsing = busy).
+   - Inner dot fades in when glass-watch has detected a glass on the platform.
+   currentColor on the SVG means a single class flip recolors both elements. */
+/* A button — it taps through to the queue screen. Styled bare (no border or
+   background) so it still reads as a status indicator, not a chunky button. */
 .ready-indicator {
+  appearance: none;
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: inherit;
 }
-.ready-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--status-ready);
+/* Generous touch area around the small icon+label visual. */
+.ready-indicator::before {
+  content: "";
+  position: absolute;
+  inset: -12px -8px;
 }
-.ready-indicator--busy .ready-dot {
-  background: var(--accent-sours);
-  animation: ready-pulse 1.2s ease-in-out infinite;
-}
-@keyframes ready-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+.ready-indicator:active .ready-label {
+  color: var(--text-primary);
 }
 .ready-label {
   font-size: 10px;
@@ -195,6 +206,50 @@ body {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.ready-indicator .glass-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--status-ready);
+  transition: color 200ms ease-out;
+  display: block;
+}
+.ready-indicator .glass-icon__center {
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+.ready-indicator--glass .glass-icon__center {
+  opacity: 1;
+}
+.ready-indicator--busy .glass-icon {
+  color: var(--accent-sours);
+  animation: ready-pulse 1.2s ease-in-out infinite;
+}
+/* Pouring: the pie wedge is the live progress, so suppress the pulse and the
+   center dot — the growing wedge IS the activity signal, and it's broadcast
+   from machine-state so every connected tablet fills in lockstep. */
+.ready-indicator--pouring .glass-icon {
+  animation: none;
+}
+.ready-indicator--pouring .glass-icon__center {
+  opacity: 0;
+}
+.glass-icon__pie {
+  transition: d 200ms linear;
+}
+/* Parked — a poured drink waits for a Continue tap. Accent + pulse so it
+   reads as "needs attention" from whatever screen you're on. */
+.ready-indicator--parked .glass-icon {
+  color: var(--accent-party);
+  animation: ready-pulse 1.2s ease-in-out infinite;
+}
+.ready-indicator--parked .ready-label {
+  color: var(--accent-party);
+}
+@keyframes ready-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 /* Count label (e.g. "4 DRINKS") */
@@ -378,8 +433,8 @@ body {
   flex: 0 0 auto;
   display: flex;
   justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-wrap: nowrap;
 }
 .shots-pill {
   appearance: none;
@@ -390,16 +445,17 @@ body {
   font-family: inherit;
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  padding: 6px 18px 6px 10px;
+  padding: 6px 14px 6px 10px;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 44px;
+  white-space: nowrap;
 }
 .shots-pill__glass { display: inline-flex; flex: 0 0 auto; }
-.shots-pill__label { color: var(--text-secondary); }
+.shots-pill__label { color: var(--text-secondary); white-space: nowrap; }
 
 /* ---------- Drink cards ---------- */
 
@@ -449,6 +505,13 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
+  /* Clip the scaled-up drink photo to the card. The photo's black background is
+     hidden by `mix-blend-mode: lighten`, but that blend only reaches a backdrop
+     inside the card's own stacking context — `.tappable:active` adds transform
+     + opacity, making the card an isolated context, so any part of the photo
+     overflowing the card would lose its --bg-surface backdrop and paint raw
+     black. Containing it keeps the blend valid in every press state. */
+  overflow: hidden;
   padding: 14px 12px;
   display: flex;
   flex-direction: column;
@@ -686,6 +749,17 @@ body {
   flex-direction: column;
   gap: 6px;
 }
+.detail-ingredients-list--two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 16px;
+  row-gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.ingredients-wrap:has(.detail-ingredients-list--two-col) {
+  gap: 24px;
+}
 .detail-ing-line {
   display: flex;
   align-items: center;
@@ -709,6 +783,10 @@ body {
 .detail-ing-text {
   margin: 0;
 }
+
+/* Estimated-strength readout under the ingredient breakdown. Informational,
+   not a warning — kept quiet so it doesn't compete with the pour button. */
+/* ABV readout uses the shared .abv-readout class — see shared.css. */
 
 .control-group {
   display: flex;
@@ -901,6 +979,8 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
+  /* Clip the scaled drink photo so its blend keeps a backdrop on press — see .drink-card */
+  overflow: hidden;
   padding: 10px;
   display: flex;
   align-items: center;
@@ -954,6 +1034,7 @@ body {
   display: grid;
   gap: 6px;
 }
+.keyboard-row--numbers,
 .keyboard-row--r1 { grid-template-columns: repeat(10, 1fr); }
 .keyboard-row--r2 {
   grid-template-columns: repeat(9, 1fr);
@@ -1007,6 +1088,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Decorative — never intercept taps meant for the footer buttons. */
+  pointer-events: none;
 }
 .pouring-progress {
   display: flex;
@@ -1014,11 +1097,31 @@ body {
   gap: 18px;
   min-width: 0;
 }
+.pouring-step-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
 .pouring-step-label {
   font-size: 16px;
   font-weight: 500;
   color: var(--text-primary);
   letter-spacing: 0.01em;
+  min-width: 0;
+}
+.pouring-timer {
+  flex: 0 0 auto;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+  /* tabular digits so the countdown doesn't jitter the layout as it ticks */
+  font-variant-numeric: tabular-nums;
+}
+.pouring-timer.is-finishing {
+  font-size: 13px;
+  color: var(--text-tertiary);
 }
 .pouring-bar {
   height: 4px;
@@ -1136,6 +1239,45 @@ body {
   z-index: 1;
 }
 
+/* Footer action row on the pouring screen — "Add drink" beside hold-to-cancel. */
+.pour-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* "Add drink" — secondary pill for stacking another drink onto the round.
+   Same envelope as .pour-cancel so the two read as a matched pair. */
+.round-add-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: 1px solid var(--border-emphasis);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 12px 20px;
+  min-height: 40px;
+  flex: 0 0 auto;
+}
+.round-add-btn svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+.round-add-btn:active {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
 /* ---------- Idle screen ---------- */
 
 .screen--idle {
@@ -1172,7 +1314,9 @@ body {
 /* Notifications bell — same envelope as .admin-btn so it sits cleanly next to
    the ready indicator in the admin header. Slightly larger glyph (18px) since
    the lucide bell has thinner strokes than the cog. */
-.notifications-btn {
+.notifications-btn,
+.history-btn,
+.restart-btn {
   appearance: none;
   background: transparent;
   border: 1px solid var(--border-default);
@@ -1185,12 +1329,55 @@ body {
   padding: 0;
   position: relative;
 }
-.notifications-btn::before {
+.notifications-btn::before,
+.history-btn::before,
+.restart-btn::before {
   content: "";
   position: absolute;
   inset: -6px;
 }
-.notifications-btn svg { width: 18px; height: 18px; display: block; }
+.notifications-btn svg,
+.history-btn svg,
+.restart-btn svg { width: 18px; height: 18px; display: block; }
+
+.restart-btn__label {
+  display: none;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+/* Two-tap confirm state: swap the icon for the "Tap again to restart" label
+   and widen the pill to fit. Party-accent border + text so the operator can
+   see at a glance that the button is primed. */
+.restart-btn.is-confirming {
+  width: auto;
+  color: var(--accent-party);
+  border-color: var(--accent-party);
+}
+.restart-btn.is-confirming .restart-btn__icon { display: none; }
+.restart-btn.is-confirming .restart-btn__label { display: inline; }
+
+.notifications-indicator {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  background: var(--accent-party);
+  border: 1.5px solid var(--bg-primary);
+  border-radius: 999px;
+  opacity: 0;
+  transform: scale(0);
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+  pointer-events: none;
+}
+.notifications-btn.has-unseen .notifications-indicator {
+  opacity: 1;
+  transform: scale(1);
+}
 .header-right-cluster {
   display: inline-flex;
   align-items: center;
@@ -1269,6 +1456,13 @@ body {
   flex-direction: column;
   justify-content: flex-end;
   gap: 16px;
+  /* The drink photo is scaled up past its box (a transformed element, so it
+     paints in the stacking-context layer — above plain in-flow siblings like
+     this footer). Lift the footer into the positioned layer so its controls
+     sit on top of the image. z-index 1 is the content tier, well below the
+     50–100 overlay tier (toasts, modals). */
+  position: relative;
+  z-index: 1;
 }
 .complete-main {
   flex: 1;
@@ -1282,6 +1476,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Decorative — never intercept taps meant for the footer buttons. */
+  pointer-events: none;
 }
 .complete-info {
   display: flex;
@@ -1361,6 +1557,141 @@ body {
   flex: 0 0 auto;
 }
 
+/* ---------- Drink queue screen ---------- */
+
+.screen--queue {
+  gap: 12px;
+}
+.queue-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.queue-status {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+/* Scrollable list — the queue caps at 10, taller than the viewport fits. */
+.queue-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.queue-empty {
+  padding: 28px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.queue-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+/* The drink that pours next reads a touch brighter. */
+.queue-row--next {
+  background: var(--bg-surface-2);
+  border-color: var(--border-emphasis);
+}
+.queue-row__num {
+  flex: 0 0 auto;
+  width: 18px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+.queue-row__glass {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.queue-row__info {
+  flex: 1;
+  min-width: 0;
+}
+.queue-row__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.queue-row__ings {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+/* Remove button uses the shared .queue-remove-btn class — see shared.css. */
+.queue-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.queue-pour-btn {
+  appearance: none;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 12px 20px;
+  min-height: 48px;
+  width: 100%;
+}
+.queue-secondary {
+  display: flex;
+  gap: 10px;
+}
+.queue-secondary-btn {
+  appearance: none;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: transparent;
+  border: 1px solid var(--border-emphasis);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 11px 16px;
+  min-height: 44px;
+}
+.queue-secondary-btn svg { width: 13px; height: 13px; display: block; }
+.queue-secondary-btn:active {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.queue-clear-btn {
+  color: var(--accent-party);
+}
+
 /* ---------- Admin / Inventory screen ---------- */
 
 .screen--admin {
@@ -1381,12 +1712,14 @@ body {
   font-family: inherit;
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.18em;
+  /* Tightened from 0.18em / 8px 14px so all seven tabs fit the 800px strip. */
+  letter-spacing: 0.13em;
   text-transform: uppercase;
-  padding: 8px 14px;
+  padding: 8px 10px;
   min-height: 36px;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
+  white-space: nowrap;
 }
 .admin-tab.is-active {
   color: var(--text-primary);
@@ -1410,6 +1743,51 @@ body {
   padding-right: 4px;
 }
 .admin-body::-webkit-scrollbar { display: none; }
+
+/* Inventory tab — consolidated "what to buy" panel above the slot grid. */
+.shopping-list {
+  flex: 0 0 auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.shopping-list__head {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.shopping-list__empty {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.shopping-list__group {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.shopping-list__group-label {
+  flex: 0 0 96px;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+/* Match the dashboard inventory donut: empty = red, low = amber. */
+.shopping-list__group--out .shopping-list__group-label { color: var(--accent-shots); }
+.shopping-list__group--low .shopping-list__group-label { color: var(--accent-sours); }
+.shopping-list__items {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
 
 .admin-inventory-toolbar {
   display: flex;
@@ -1552,6 +1930,88 @@ button.admin-slot__level {
   display: block;
 }
 
+/* Ingredients tab — persistent per-ingredient attribute catalog. */
+.ingredient-add-btn {
+  appearance: none;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-surface-2);
+  border: 1px dashed var(--border-emphasis);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  min-height: 48px;
+}
+.ingredient-group-label {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 8px 2px 0;
+}
+.ingredient-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  min-height: 48px;
+  overflow: hidden; /* clip the delete column's divider to the rounded corners */
+}
+.ingredient-row__main {
+  appearance: none;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  padding: 0 14px;
+  font-family: inherit;
+  text-align: left;
+}
+.ingredient-row__name {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.ingredient-row__meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ingredient-row__delete {
+  appearance: none;
+  flex: 0 0 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--border-default);
+  color: var(--text-tertiary);
+}
+.ingredient-row__delete svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+/* Armed (first tap) — red confirm state; second tap deletes. */
+.ingredient-row__delete.is-armed {
+  background: var(--accent-shots);
+  color: var(--bg-primary);
+}
+
 /* Ingredient picker overlay */
 .admin-picker {
   position: absolute;
@@ -1628,8 +2088,10 @@ button.admin-slot__level {
 
 .dash-status {
   flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: auto auto 1fr 1fr 1fr;
+  /* Flex (not a fixed-column grid) so the strip holds 3 or 4 stats on one
+     row — the optional "Bar value" stat appears only once a cost is set. */
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 22px;
   background: var(--bg-surface);
@@ -1657,6 +2119,9 @@ button.admin-slot__level {
   color: var(--text-primary);
 }
 .dash-stat {
+  /* Each stat shares the row equally; mode cluster stays content-sized. */
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -1915,7 +2380,7 @@ button.admin-slot__level {
 }
 .recipe-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   flex: 0 0 auto;
 }
@@ -1937,6 +2402,7 @@ button.admin-slot__level {
   color: inherit;
   font-family: inherit;
   min-height: 48px;
+  min-width: 0;
 }
 .recipe-card.is-hidden,
 .recipe-card.is-cat-hidden {
@@ -2494,43 +2960,17 @@ button.admin-slot__level {
 
 /* ---------- Toast banner ---------- */
 
-/* Bottom-centered, above any screen footer. The pour cancel button bottom-aligns
-   to ~24px so the toast clears it at 60px. z-index sits above screens but below
-   the WS reconnect overlay (z:100), since reconnect is the more critical state. */
+/* All visual treatment + layout lives in toast.css (shared with the mobile
+   order page). Only kiosk-specific position + stacking is here: the pour
+   cancel button bottom-aligns to ~24px so the toast clears it at 60px;
+   z-index sits above screens but below the WS reconnect overlay (z:100),
+   since reconnect is the more critical state. */
 .toast {
-  position: fixed;
-  left: 50%;
   bottom: 60px;
-  transform: translate(-50%, 12px);
-  min-width: 240px;
-  max-width: 540px;
-  padding: 12px 18px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-emphasis);
-  border-radius: var(--radius-lg);
-  border-left-width: 3px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 200ms ease-out, transform 200ms ease-out;
   z-index: 90;
 }
-.toast.is-visible {
-  opacity: 1;
-  transform: translate(-50%, 0);
-  pointer-events: all;
-}
-.toast[data-variant="error"] {
-  border-left-color: var(--accent-shots);
-}
-.toast[data-variant="info"] {
-  border-left-color: var(--text-secondary);
-}
-.toast__label {
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--text-primary);
-  text-align: center;
-  line-height: 1.3;
+.toast-scrim {
+  z-index: 89;
 }
 
 /* ---------- Shot picker (spirit grid) ---------- */
@@ -2822,11 +3262,17 @@ button.admin-slot__level {
   background: var(--bg-surface);
   border: 1px solid var(--border-emphasis);
   border-radius: var(--radius-lg);
-  padding: 18px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 9px;
+  /* Capacity, cost and ABV steppers stacked can exceed the 480px screen —
+     cap the height and let the panel scroll rather than clip. */
+  max-height: 452px;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
+.capacity-editor__panel::-webkit-scrollbar { display: none; }
 .capacity-editor__sub {
   font-size: 11px;
   font-weight: 500;
@@ -3048,6 +3494,23 @@ button.admin-slot__level {
   letter-spacing: 0.12em;
   padding: 0 10px;
   min-height: 32px;
+}
+
+/* Saved-backup rows reuse .maint-slot but have no slot-number column. */
+.maint-slot--backup {
+  grid-template-columns: 1fr auto;
+}
+.maint-backup-empty {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+  padding: 4px 2px;
+}
+/* A two-tap-confirm button mid-arm: borrows the warn accent to signal that
+   the next tap commits a destructive action. */
+.maint-btn.is-armed {
+  border-color: var(--accent-sours);
+  color: var(--accent-sours);
 }
 
 .maint-meta {
@@ -3470,12 +3933,15 @@ button.admin-slot__level {
 
 /* Notifications rows reuse history-row layout but pick up a left-border
    accent that mirrors the toast variant they came from — error rows pop,
-   info rows stay quiet. */
+   success rows go green, info rows stay quiet. */
 .notification-row {
   border-left-width: 3px;
 }
 .notification-row[data-variant="error"] {
   border-left-color: var(--accent-shots);
+}
+.notification-row[data-variant="success"] {
+  border-left-color: var(--status-ready);
 }
 .notification-row[data-variant="info"] {
   border-left-color: var(--text-secondary);
@@ -3483,8 +3949,330 @@ button.admin-slot__level {
 .notification-row[data-variant="error"] .history-row__name {
   color: var(--accent-shots);
 }
+.notification-row[data-variant="success"] .history-row__name {
+  color: var(--status-ready);
+}
 .notification-row[data-variant="info"] .history-row__name {
   color: var(--text-secondary);
+}
+
+/* ---------- Drink-history detail (Top Drinks leaderboard) ---------- */
+
+.admin-body--leader { gap: 8px; }
+
+/* Overview band: headline stat tiles + a 14-day activity chart. */
+.dstat-overview {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dstat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.dstat-tile {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dstat-tile__value {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dstat-tile__label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.dstat-tile__sub {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.dstat-chart {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dstat-chart__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dstat-chart__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dstat-toggle {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--border-emphasis);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill);
+  padding: 5px 12px;
+  min-height: 28px;
+  cursor: inherit;
+}
+.dstat-chart__title {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.dstat-chart__note {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.dstat-chart__axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--text-quaternary);
+  letter-spacing: 0.04em;
+}
+
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  width: 100%;
+}
+.bar-chart__col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+  /* Some columns are <button> when the chart is tappable; reset native chrome
+     so they sit flush with the non-tappable variant. */
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+}
+.bar-chart__col:focus { outline: none; }
+.bar-chart__col.is-selected .bar-chart__bar {
+  outline: 1px solid var(--text-secondary);
+  outline-offset: 2px;
+}
+.bar-chart__bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  display: flex;
+  flex-direction: column-reverse;
+  overflow: hidden;
+}
+.bar-chart__bar.is-empty {
+  background: var(--border-divider);
+}
+.bar-chart__seg {
+  width: 100%;
+}
+
+/* Legend chips under the activity chart, plus the drill-down breakdown panel
+   beneath it. Both pages share these tokens. */
+.dstat-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.dstat-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-divider);
+  margin-top: 2px;
+}
+.dstat-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.dstat-legend__swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.dstat-breakdown {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.dstat-breakdown__empty {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+.dstat-breakdown__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.dstat-breakdown__date {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+}
+.dstat-breakdown__sum {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.dstat-breakdown__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dstat-breakdown__row {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  min-width: 0;
+}
+.dstat-breakdown__swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.dstat-breakdown__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dstat-breakdown__value {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.leader-section-head {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding-top: 2px;
+}
+.dstat-note {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+.leader-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.leader-row {
+  display: grid;
+  grid-template-columns: 18px 8px 1fr;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  box-sizing: border-box;
+}
+.leader-row__rank {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.leader-row__swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.leader-row__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.leader-row__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.leader-row__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.leader-row__count {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+.leader-row__bar {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface-2);
+  overflow: hidden;
+}
+.leader-row__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+}
+.leader-row__meta {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.04em;
 }
 
 /* ── Admin Network tab ────────────────────────────────────────────── */
@@ -3730,4 +4518,216 @@ button.admin-slot__level {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* Scale calibration modal — reuses pin-modal overlay + keypad styling. */
+.scale-cal-modal {
+  width: 280px;
+}
+.scale-cal-modal__display {
+  font-size: 26px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  text-align: center;
+  min-height: 32px;
+  line-height: 1;
+}
+.scale-cal-modal__actions {
+  display: flex;
+  gap: 8px;
+}
+.scale-cal-modal__actions .pin-modal__cancel,
+.scale-cal-modal__actions .maint-btn {
+  flex: 1;
+  margin-top: 0;
+}
+
+/* ---------- Surprise Me (slot machine) ---------- */
+
+/* Entry pill — sibling of .shots-pill / .build-pill, party-accent border. */
+.surprise-pill {
+  border-color: color-mix(in srgb, var(--accent-party) 30%, var(--border-default));
+}
+.surprise-pill__icon {
+  display: inline-flex;
+  color: var(--accent-party);
+}
+.surprise-pill__icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.screen--surprise {
+  position: relative;
+  /* Tighter gap than the default 16 so the reel + tick ring + name + tagline
+     + actions all fit in the 436px content height (480 − screen padding). */
+  gap: 12px;
+}
+
+/* Frame occupying a fixed 260×260 footprint in the flex layout — adjacent
+   elements size against this. The reel (260) fills it; the tick SVG (280)
+   overflows by 10px each side, rendering into the surrounding gap space. */
+.surprise-reel-wrap {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-top: auto;
+  position: relative;
+  width: 260px;
+  height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Radial tick marks just outside the reel border — slot-machine selector
+   ornament. Centred on the wrap via top/left + negative margins so the 280px
+   SVG sits 10px outside the 260px wrap on every side. pointer-events:none so
+   the reel underneath stays tappable. */
+.surprise-reel-ticks {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 280px;
+  height: 280px;
+  margin-top: -140px;
+  margin-left: -140px;
+  pointer-events: none;
+}
+.surprise-reel-ticks line {
+  stroke: var(--border-strong);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.surprise-reel-ticks .tick--short {
+  stroke-width: 1;
+}
+
+/* The reel is an outlined circle; the strip scrolls within it, clipped to the
+   circle edges. Acts as a tap target — tapping the resting drink opens its
+   detail screen, same as "Pour this →". */
+.surprise-reel {
+  width: var(--cell-h);
+  height: var(--cell-h);
+  border-radius: 50%;
+  border: 1px solid var(--border-emphasis);
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+.surprise-reel__strip {
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+  /* The strip's transform creates a stacking context that isolates blend
+     modes. The drink photos hide their black background via
+     mix-blend-mode: lighten, which needs a surface to blend against within
+     that context — so the surface lives on the strip. --bg-primary matches
+     the page background, so the reel is seamless with the rest of the screen. */
+  background: var(--bg-primary);
+}
+/* Vertical-only motion blur while the reel spins fast — see the
+   #surprise-motion-blur SVG filter. Toggled off mid-spin so it lands sharp. */
+.surprise-reel__strip.is-blurring {
+  filter: url(#surprise-motion-blur);
+}
+/* Holds the off-screen SVG <defs> for the filter above — no layout footprint. */
+.surprise-blur-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.surprise-cell {
+  height: var(--cell-h);
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* Glass photos are rendered with transform: scale(1.35) (see glass.js) so
+     they overflow their layout box by ~33px top and bottom. Without this
+     clip the previous cell's glass would bleed into the top of the visible
+     cell. */
+  overflow: hidden;
+}
+
+/* Drink name + tagline sit below the reel — moved out of the cell so the
+   glass can fill more of the circle. Name slot keeps its height while empty
+   (during the spin) via min-height, so the layout doesn't jump on landing. */
+.surprise-result {
+  flex: 0 0 auto;
+  align-self: center;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.surprise-result__name {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  line-height: 24px;
+  min-height: 24px;
+}
+.surprise-result__tagline {
+  font-size: 13px;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+  line-height: 18px;
+  min-height: 18px;
+}
+
+.surprise-actions {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-bottom: auto;
+  display: flex;
+  gap: 12px;
+  width: 340px;
+  transition: opacity 200ms ease-out;
+}
+/* While the reel spins the result isn't final — hide the buttons entirely so
+   the scrolling drinks never read as overlapping them. They fade back in (via
+   the .surprise-actions opacity transition) when the reel stops. */
+.screen--surprise.is-spinning .surprise-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+.surprise-btn {
+  appearance: none;
+  flex: 1;
+  min-height: 48px;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.surprise-btn--spin {
+  background: transparent;
+  border: 1px solid var(--border-emphasis);
+  color: var(--text-primary);
+}
+.surprise-btn--pour {
+  background: var(--accent-party);
+  border: none;
+  color: var(--bg-primary);
+}
+
+.surprise-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  max-width: 340px;
+  margin: 0 auto;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }

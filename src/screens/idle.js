@@ -62,6 +62,8 @@ export function idle() {
     right: rightSlot,
   });
   element.appendChild(headerEl);
+  // The drink queue is reachable from the header's queue chip on every
+  // screen — no idle-only banner needed.
 
   // Hidden admin gesture: 5 quick taps on the "Station 01" eyebrow opens the
   // inventory screen. Resets if taps slow down (>800ms between taps).

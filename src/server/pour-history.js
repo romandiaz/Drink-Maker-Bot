@@ -39,6 +39,12 @@ async function persist() {
   await writeFile(HISTORY_PATH, JSON.stringify(cache, null, 2), "utf8");
 }
 
+// Re-read from disk after a backup restore.
+export async function reloadFromDisk() {
+  cache = null;
+  await load();
+}
+
 export async function record({ drinkId, drinkName, ingredients }) {
   const data = await load();
   data.entries.push({

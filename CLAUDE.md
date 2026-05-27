@@ -31,33 +31,138 @@ Every layout decision assumes this resolution. Never design for responsive resiz
 bartender-kiosk/
 ├── CLAUDE.md                    ← this file
 ├── README.md                    ← human-facing quickstart
+├── package.json                 ← Node deps for the backend
 ├── docs/
 │   ├── DESIGN_BRIEF.md          ← full visual spec (read this!)
-│   └── SCREENS.md               ← per-screen behavior spec
+│   ├── SCREENS.md               ← per-screen behavior spec
+│   └── DECISIONS.md             ← log of ambiguous-call decisions
+├── firmware/
+│   ├── bartender/bartender.ino  ← Arduino sketch driving the pumps
+│   └── diag/diag.ino            ← pump diagnostic sketch
+├── scripts/
+│   ├── install-kiosk.sh         ← Pi: X + Chromium + systemd service
+│   ├── install-network.sh       ← Pi: nmcli sudoers + captive-portal plumbing
+│   ├── dnsmasq-captive.conf     ← DNS-hijack snippet for AP mode
+│   ├── nm-dispatcher-captive.sh ← iptables flip on Hotspot up/down
+│   └── serial-bridge.js         ← dev-only USB ↔ WebSocket bridge
 ├── src/
-│   ├── index.html               ← single entry point, all screens
+│   ├── index.html               ← kiosk entry point, all screens
+│   ├── order.html               ← mobile order page entry (phones on the AP)
+│   ├── welcome.html             ← captive-portal landing page (AP mode)
 │   ├── styles.css               ← global styles, design tokens
-│   ├── app.js                   ← bootstrap, screen routing
-│   ├── state.js                 ← appState + action fns
-│   ├── drinks.js                ← drink + category data
+│   ├── app.js                   ← bootstrap, screen router
+│   ├── state.js                 ← appState + action fns (transient UI state)
+│   ├── api.js                   ← REST client for the backend
+│   ├── ws.js                    ← WebSocket client (pour progress, machine state, queue)
+│   ├── drinks.js                ← built-in drink + category catalog
+│   ├── ingredients.js           ← canonical ingredient ID list (derived from drinks)
+│   ├── ingredient-defaults.js   ← seed ABV / bottle-size values (shared frontend + backend)
+│   ├── icons.js                 ← inline SVG icon set
+│   ├── format.js                ← oz/ml formatting helpers
+│   ├── slug.js                  ← name → id slug helper
+│   ├── queue-store.js           ← live drink-queue mirror (reflects server/queue.js)
+│   ├── admin-auth.js            ← admin PIN session (frontend)
+│   ├── inventory-store.js       ← live inventory subscription (SLOT_COUNT lives here)
+│   ├── calibration-store.js     ← live calibration subscription
+│   ├── ingredient-store.js      ← live per-ingredient attribute cache (ABV, size, cost)
+│   ├── category-store.js        ← admin-hidden categories cache
+│   ├── machine-status.js        ← ready / busy / error indicator state
+│   ├── order.js                 ← mobile order page (served at /order)
+│   ├── order-sheet.js           ← mobile order: drink-detail sheet + strength
+│   ├── order-tray.js            ← mobile order: bottom queue tray
+│   ├── order-status.js          ← mobile order: sticky status + pour progress
+│   ├── order-notify.js          ← mobile order: sound + title + Notification + Wake Lock on "ready"
+│   ├── order-client-id.js       ← mobile order: stable per-device id (localStorage)
 │   ├── screens/
-│   │   ├── idle.js
-│   │   ├── category.js
-│   │   ├── search.js
-│   │   ├── drink-list.js
-│   │   ├── detail.js
-│   │   ├── pouring.js
-│   │   └── complete.js
+│   │   ├── idle.js                ← attract screen
+│   │   ├── idle-timeofday.js      ← time-of-day featured-drink buckets
+│   │   ├── category.js            ← four-category grid
+│   │   ├── drink-list.js          ← drinks in a category
+│   │   ├── search.js              ← search + keyboard
+│   │   ├── detail.js              ← drink detail / customize
+│   │   ├── shot-picker.js         ← straight-shot ingredient picker
+│   │   ├── shot-detail.js         ← shot size + confirm
+│   │   ├── build-your-own.js      ← custom recipe builder
+│   │   ├── surprise.js            ← "surprise me" random-drink reel
+│   │   ├── queue.js               ← shared drink-queue view (kiosk)
+│   │   ├── pouring.js             ← live pour progress
+│   │   ├── complete.js            ← pour done, "garnish & enjoy"
+│   │   ├── admin.js               ← admin tab shell
+│   │   ├── admin-dashboard.js     ← admin home with donut charts
+│   │   ├── admin-inventory.js     ← bottle assignments + levels
+│   │   ├── admin-ingredients.js   ← ingredient attribute editor (ABV, size, cost)
+│   │   ├── admin-recipes.js       ← drink / category editor
+│   │   ├── admin-history.js       ← pour log
+│   │   ├── admin-submissions.js   ← user-submitted custom recipes
+│   │   ├── admin-maintenance.js   ← prime, purge, calibrate
+│   │   ├── admin-backup.js        ← backup & restore section of the Maintenance view
+│   │   ├── admin-network.js       ← Wi-Fi / AP mode
+│   │   └── admin-notifications.js ← low-stock / error alert log
 │   ├── components/
-│   │   ├── glass.js             ← SVG glass renderer (placeholder until photos)
-│   │   ├── keyboard.js          ← on-screen QWERTY
-│   │   └── header.js            ← station header w/ ready indicator
+│   │   ├── header.js              ← back button + status indicator
+│   │   ├── glass.js               ← SVG glass renderer (fallback art)
+│   │   ├── keyboard.js            ← on-screen QWERTY
+│   │   ├── donut.js               ← admin-dashboard donut chart
+│   │   ├── toast.js               ← transient bottom-of-screen messages
+│   │   ├── confetti.js            ← canvas confetti burst (drink-ready celebration)
+│   │   ├── status-pill.js         ← shared machine-status / queue pill (kiosk + mobile)
+│   │   ├── abv-readout.js         ← shared "≈X% ABV · Y standard drinks" readout
+│   │   ├── pin-modal.js           ← admin PIN entry
+│   │   ├── text-input-modal.js    ← modal text field (uses keyboard)
+│   │   ├── capacity-editor.js     ← bottle-size picker
+│   │   ├── ingredient-picker.js   ← search / pick from ingredient catalog
+│   │   ├── new-ingredient.js      ← shared "add an ingredient" flow
+│   │   ├── drink-editor.js        ← recipe editor (admin + build-your-own)
+│   │   ├── editor-fields.js       ← shared form-row primitives
+│   │   ├── maint-ui.js            ← shared maintenance UI primitives (actionBtn / sectionHead / formatRate)
+│   │   ├── calibrate-modal.js     ← slot pump-calibration modal
+│   │   └── scale-modals.js        ← load-cell calibrate + live-read modals
 │   ├── server/
-│   │   ├── index.js             ← Node backend, WebSocket
-│   │   └── pour.js              ← mockPour() now, real pour later
+│   │   ├── index.js               ← node:http + WebSocket entry; static serving, WS/queue, dispatches to routes/
+│   │   ├── http-util.js           ← sendJson / readJsonBody / jsonRoute helpers
+│   │   ├── pour.js                ← pour orchestrator (calls serialPour)
+│   │   ├── serialPour.js          ← per-pump serial dispatch
+│   │   ├── serial.js              ← serial port open / reconnect
+│   │   ├── queue.js               ← server-side shared drink queue (data + change notify)
+│   │   ├── inventory.js           ← inventory state + REST handlers
+│   │   ├── calibration.js         ← pump-rate calibration
+│   │   ├── maintenance.js         ← prime / purge / clean routines
+│   │   ├── machine-state.js       ← ready / busy / error state machine
+│   │   ├── pour-history.js        ← persisted log of every pour
+│   │   ├── notifications.js       ← low-stock + error alerts
+│   │   ├── network.js             ← nmcli wrapper for Wi-Fi + AP
+│   │   ├── captive-portal.js      ← welcome.html intercept in AP mode
+│   │   ├── glass-watch.js         ← ambient glass-presence detection via scale
+│   │   ├── admin-pin.js           ← PIN storage + verify
+│   │   ├── drinks-store.js        ← persisted user drinks
+│   │   ├── categories-store.js    ← persisted user categories
+│   │   ├── submissions-store.js   ← persisted user-submitted recipes
+│   │   ├── ingredients-store.js   ← persisted per-ingredient attributes (ABV, size, cost)
+│   │   ├── backup.js              ← whole-state backup / restore + on-device snapshots
+│   │   ├── routes/                ← REST route modules, one per domain (index.js dispatches)
+│   │   │   ├── inventory.js      ← pump-slot inventory + per-slot calibration
+│   │   │   ├── catalog.js        ← drinks, categories, ingredient attributes
+│   │   │   ├── submissions.js    ← user-submitted recipes + promote-to-catalog
+│   │   │   ├── history.js        ← pour stats + raw pour log
+│   │   │   ├── notifications.js  ← low-stock / error alerts
+│   │   │   ├── maintenance.js    ← prime / flush, pump + load-cell calibration
+│   │   │   ├── auth.js           ← admin PIN verify
+│   │   │   ├── network.js        ← nmcli Wi-Fi / AP endpoints
+│   │   │   └── backup.js         ← state backup download / list / restore / delete
+│   │   └── state/                 ← JSON state persisted to disk
+│   │       ├── drinks.json        ← persisted user drinks
+│   │       ├── categories.json    ← persisted user categories
+│   │       ├── inventory.json     ← pump-slot assignments + levels
+│   │       ├── calibration.json   ← per-slot pump flow rates
+│   │       ├── ingredients.json   ← per-ingredient attributes (ABV, size, cost)
+│   │       ├── pour-history.json  ← log of every pour
+│   │       ├── notifications.json ← low-stock / error alerts
+│   │       ├── submissions.json   ← user-submitted recipes
+│   │       ├── orders.json        ← persisted drink queue
+│   │       ├── pump-usage.json    ← cumulative pump run-time per slot
+│   │       └── admin-pin.json     ← admin PIN
 │   └── assets/
-│       └── drinks/              ← photos go here (16 files, see brief)
-└── package.json                 ← just for the backend
+│       └── drinks/              ← drink photos (~70 PNGs)
 ```
 
 ## Design tokens (CSS custom properties)
@@ -189,6 +294,17 @@ export const drinks = [
 ];
 ```
 
+## Adding new ingredients
+
+When a new ingredient is added to the catalog (via `INGREDIENT_COLORS` / `PRETTY_NAMES` in `src/ingredients.js`, or seeded by a new recipe), evaluate whether it belongs in `shotIngredients` in `src/drinks.js`. The rule:
+
+- **Add it if** the ingredient is a spirit or liqueur that a person would plausibly drink straight: vodkas (incl. flavored), rums, whiskeys, gins, tequilas, mezcals, brandies/cognacs, schnapps, amari, and most cordials/liqueurs (kahlua, midori, cointreau, st-germain, etc).
+- **Skip it if** it's a mixer, modifier, or non-drinkable-straight item: juices, sodas, syrups (simple/grenadine/orgeat), bitters, coconut cream, beer, dairy.
+- **Default `defaultOz`:** `1.5` for ~35%+ ABV spirits, `1.0` for liqueurs and lower-ABV cordials.
+- **`color`:** mirror the value already defined in `INGREDIENT_COLORS` for that ID so the shot-tile preview matches the rest of the UI.
+
+This keeps the shots menu in sync with the catalog automatically rather than requiring a separate ask.
+
 ## Robot control contract
 
 The frontend never talks to hardware directly. It sends WebSocket messages to the Node backend:
@@ -270,3 +386,46 @@ If you encounter ambiguity the brief doesn't resolve, make a reasonable choice a
 - What's the admin/refill flow?
 
 Default to simplicity. We can always add complexity later.
+
+## AI Behavioral Guidelines
+
+These guidelines bias toward caution over speed to reduce common LLM coding mistakes. For trivial tasks, use judgment.
+
+### 1. Think Before Coding
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+### 2. Simplicity First
+**Minimum code that solves the problem. Nothing speculative.**
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+### 3. Surgical Changes
+**Touch only what you must. Clean up only your own mess.**
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+The test: Every changed line should trace directly to the user's request.
+
+### 4. Goal-Driven Execution
+**Define success criteria. Loop until verified.**
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+For multi-step tasks, state a brief plan:
+`1. [Step] → verify: [check]`
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.

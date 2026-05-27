@@ -1,9 +1,10 @@
 // Client-side cache of per-slot pump flow rates. Mirrors inventory-store.js
-// — populated at boot, refreshed after admin maintenance edits, read
-// synchronously by pour-time estimate code paths.
+// — populated at boot, kept fresh by the CALIBRATION_UPDATED WS broadcast,
+// read synchronously by pour-time estimate code paths.
 
 import { DEFAULT_FLOW_OZ_PER_SEC } from "./drinks.js";
 import { slotForIngredient } from "./inventory-store.js";
+import { on as onWS } from "./ws.js";
 
 const state = {
   defaultFlowOzPerSec: DEFAULT_FLOW_OZ_PER_SEC,
@@ -59,6 +60,6 @@ export function flowRateForIngredient(ingredientId) {
   return flowRateForSlot(slot);
 }
 
-export function isCalibrationLoaded() {
-  return state.loaded;
-}
+// Refresh whenever the server says calibration changed (admin save, slot
+// calibrate, or clear). Errors are swallowed inside loadCalibration.
+onWS("CALIBRATION_UPDATED", () => { loadCalibration(); });

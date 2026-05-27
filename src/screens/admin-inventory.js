@@ -1,8 +1,10 @@
 import { ingredientPicker } from "../components/ingredient-picker.js";
 import { capacityEditor } from "../components/capacity-editor.js";
 import { ingredientName } from "../ingredients.js";
-import { reloadInventory } from "../app.js";
-import { bottleStatus, LOW_BOTTLE_THRESHOLD } from "../inventory-store.js";
+import { ingredientAttributes, loadIngredients } from "../ingredient-store.js";
+import { bottleStatus, LOW_BOTTLE_THRESHOLD, barValue } from "../inventory-store.js";
+import { drinks, isDrinkEnabled } from "../drinks.js";
+import { isCategoryEnabled } from "../category-store.js";
 import { CLOSE_SVG } from "../icons.js";
 import { putJSON, getJSON } from "../api.js";
 import { showToast } from "../components/toast.js";
@@ -12,6 +14,68 @@ import { showToast } from "../components/toast.js";
 
 function formatOz(n) {
   return Number(n).toFixed(1);
+}
+
+// Consolidated "what to buy" panel for the top of the inventory tab: bottles
+// that are empty or running low, plus ingredients a recipe calls for that
+// aren't loaded in any slot. Recomputed on every render so it stays live.
+function shoppingList(inventory) {
+  const slots = inventory.slots;
+  const empty = slots.filter((s) => bottleStatus(s) === "empty");
+  const low = slots.filter((s) => bottleStatus(s) === "low");
+
+  const assigned = new Set(
+    slots.filter((s) => s.ingredientId).map((s) => s.ingredientId)
+  );
+  // Ingredients a visible recipe needs but no slot holds — most-wanted first.
+  const demand = new Map();
+  for (const d of drinks) {
+    if (!isDrinkEnabled(d) || !isCategoryEnabled(d.category)) continue;
+    for (const i of d.ingredients) {
+      if (!assigned.has(i.name)) {
+        demand.set(i.name, (demand.get(i.name) || 0) + 1);
+      }
+    }
+  }
+  const notLoaded = [...demand.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => id);
+
+  const panel = document.createElement("div");
+  panel.className = "shopping-list";
+
+  const head = document.createElement("div");
+  head.className = "shopping-list__head";
+  head.textContent = "Shopping list";
+  panel.appendChild(head);
+
+  const groups = [
+    { key: "out", label: "Out of stock", ids: empty.map((s) => s.ingredientId) },
+    { key: "low", label: "Running low", ids: low.map((s) => s.ingredientId) },
+    { key: "missing", label: "Not loaded", ids: notLoaded },
+  ].filter((g) => g.ids.length > 0);
+
+  if (groups.length === 0) {
+    const ok = document.createElement("div");
+    ok.className = "shopping-list__empty";
+    ok.textContent = "Everything's stocked — nothing to buy.";
+    panel.appendChild(ok);
+    return panel;
+  }
+
+  for (const g of groups) {
+    const group = document.createElement("div");
+    group.className = `shopping-list__group shopping-list__group--${g.key}`;
+    const lbl = document.createElement("div");
+    lbl.className = "shopping-list__group-label";
+    lbl.textContent = `${g.label} · ${g.ids.length}`;
+    const items = document.createElement("div");
+    items.className = "shopping-list__items";
+    items.textContent = g.ids.map(ingredientName).join(", ");
+    group.append(lbl, items);
+    panel.appendChild(group);
+  }
+  return panel;
 }
 
 function slotRow(slot, { onPick, onRefill, onClear, onCapacity }) {
@@ -41,18 +105,24 @@ function slotRow(slot, { onPick, onRefill, onClear, onCapacity }) {
     level.classList.add("admin-slot__level--editable", "tappable");
     level.addEventListener("click", () => onCapacity(slot));
   }
+  // Bottle size and cost are ingredient attributes, not slot fields — read
+  // them from the ingredient's persistent record.
+  const attrs = slot.ingredientId ? ingredientAttributes(slot.ingredientId) : null;
   const bar = document.createElement("div");
   bar.className = "admin-slot__bar";
   const fill = document.createElement("div");
   fill.className = "admin-slot__bar-fill";
-  const pct = slot.capacityOz > 0 ? slot.remainingOz / slot.capacityOz : 0;
+  const pct = attrs && attrs.bottleSizeOz > 0 ? slot.remainingOz / attrs.bottleSizeOz : 0;
   fill.style.width = `${Math.max(0, Math.min(1, pct)) * 100}%`;
   if (pct <= LOW_BOTTLE_THRESHOLD) fill.classList.add("is-low");
   bar.appendChild(fill);
   const label = document.createElement("span");
   label.className = "admin-slot__level-label";
-  label.textContent = slot.ingredientId
-    ? `${formatOz(slot.remainingOz)} / ${formatOz(slot.capacityOz)} oz`
+  // Append the bottle cost when one is recorded — the level column is also the
+  // tap target for the attributes editor, so it reads as "tap to edit".
+  label.textContent = attrs
+    ? `${formatOz(slot.remainingOz)} / ${formatOz(attrs.bottleSizeOz)} oz` +
+      (attrs.costPerBottle > 0 ? ` · $${attrs.costPerBottle}` : "")
     : "—";
   level.append(bar, label);
   row.appendChild(level);
@@ -88,14 +158,17 @@ export function adminInventoryView({ host, setMeta }) {
     if (!inventory) return;
     const loaded = inventory.slots.filter((s) => s.ingredientId).length;
     const low = inventory.slots.filter((s) => bottleStatus(s) === "low").length;
-    setMeta(low
-      ? `${loaded} / ${inventory.slots.length} loaded · ${low} low`
-      : `${loaded} / ${inventory.slots.length} loaded`);
+    const value = barValue(inventory.slots);
+    const parts = [`${loaded} / ${inventory.slots.length} loaded`];
+    if (low) parts.push(`${low} low`);
+    if (value > 0) parts.push(`$${value} value`);
+    setMeta(parts.join(" · "));
   }
 
   function render() {
     element.innerHTML = "";
     if (!inventory) return;
+    element.appendChild(shoppingList(inventory));
     element.appendChild(toolbar());
     for (const slot of inventory.slots) {
       element.appendChild(
@@ -129,15 +202,17 @@ export function adminInventoryView({ host, setMeta }) {
   function handleRefillAll() {
     const loaded = inventory.slots.filter((s) => s.ingredientId);
     if (loaded.length === 0) return;
-    for (const s of loaded) s.remainingOz = s.capacityOz;
+    for (const s of loaded) {
+      s.remainingOz = ingredientAttributes(s.ingredientId).bottleSizeOz;
+    }
     save();
   }
 
   async function save() {
     try {
       inventory = await putJSON("/api/inventory", inventory);
-      // Refresh the shared cache so other screens' pourable checks update.
-      reloadInventory();
+      // Other tablets' shared caches refresh via the INVENTORY_UPDATED
+      // WS broadcast the server emits on save.
       render();
     } catch (e) {
       console.error(e);
@@ -167,10 +242,15 @@ export function adminInventoryView({ host, setMeta }) {
         if (!target) return;
         const assigning = id && target.ingredientId !== id;
         target.ingredientId = id;
-        // Picking a new ingredient means a fresh bottle — fill it. Clearing a
-        // slot zeroes the remaining volume so it doesn't "haunt" later refills.
-        if (assigning) target.remainingOz = target.capacityOz;
-        if (!id) target.remainingOz = 0;
+        // Picking a new ingredient means a fresh bottle — fill it to that
+        // ingredient's recorded bottle size. Clearing a slot zeroes the
+        // remaining volume so it doesn't "haunt" later refills.
+        if (assigning) {
+          target.remainingOz = ingredientAttributes(id).bottleSizeOz;
+        }
+        if (!id) {
+          target.remainingOz = 0;
+        }
         pickerEl?.remove();
         pickerEl = null;
         save();
@@ -181,23 +261,37 @@ export function adminInventoryView({ host, setMeta }) {
 
   function openCapacity(slot) {
     if (pickerEl) pickerEl.remove();
+    const attrs = ingredientAttributes(slot.ingredientId);
     pickerEl = capacityEditor({
       slotNum: slot.slot,
       ingredientId: slot.ingredientId,
-      current: slot.capacityOz,
+      current: attrs.bottleSizeOz,
+      currentCost: attrs.costPerBottle,
+      currentAbv: attrs.abv,
       onCancel: () => {
         pickerEl?.remove();
         pickerEl = null;
       },
-      onDone: (oz) => {
-        const target = inventory.slots.find((s) => s.slot === slot.slot);
+      onDone: async ({ bottleSizeOz, costPerBottle, abv }) => {
         pickerEl?.remove();
         pickerEl = null;
-        if (!target) return;
-        target.capacityOz = oz;
-        // Shrinking the bottle shouldn't leave more liquid than fits in it.
-        if (target.remainingOz > oz) target.remainingOz = oz;
-        save();
+        // Capacity, cost and ABV are ingredient attributes — persist them on
+        // the ingredient, not the slot. Reload the local cache before
+        // re-rendering so the fill bar reflects the new bottle size at once;
+        // other tablets refresh via the INGREDIENTS_UPDATED broadcast.
+        try {
+          await putJSON(`/api/ingredients/${slot.ingredientId}`, {
+            bottleSizeOz,
+            costPerBottle,
+            abv,
+          });
+          await loadIngredients();
+          render();
+        } catch (e) {
+          console.error(e);
+          setMeta("Save failed — retry");
+          showToast(`Save failed — ${e.message}`);
+        }
       },
     });
     host.appendChild(pickerEl);
@@ -206,7 +300,7 @@ export function adminInventoryView({ host, setMeta }) {
   function handleRefill(slot) {
     const target = inventory.slots.find((s) => s.slot === slot.slot);
     if (!target || !target.ingredientId) return;
-    target.remainingOz = target.capacityOz;
+    target.remainingOz = ingredientAttributes(target.ingredientId).bottleSizeOz;
     save();
   }
 

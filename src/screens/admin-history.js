@@ -1,6 +1,7 @@
 import { ingredientName } from "../ingredients.js";
 import { getJSON, delJSON } from "../api.js";
 import { showToast } from "../components/toast.js";
+import { header } from "../components/header.js";
 import { navigate } from "../app.js";
 import { getDrinkById, getShotIngredientById } from "../drinks.js";
 import { setBuildDraft } from "../state.js";
@@ -105,9 +106,37 @@ function historyRow(entry) {
   return row;
 }
 
-export function adminHistoryView({ setMeta }) {
-  const element = document.createElement("div");
-  element.className = "admin-body admin-body--history";
+export function history() {
+  const element = document.createElement("section");
+  element.className = "screen screen--admin";
+  element.dataset.screen = "history";
+
+  element.appendChild(
+    header({
+      back: true,
+      eyebrow: "Station 01",
+      title: "History",
+      right: "ready",
+    })
+  );
+
+  const body = document.createElement("div");
+  body.className = "admin-body admin-body--history";
+  element.appendChild(body);
+
+  const footer = document.createElement("footer");
+  footer.className = "screen-footer";
+  const meta = document.createElement("span");
+  meta.className = "screen-footer__meta";
+  const hint = document.createElement("span");
+  hint.className = "screen-footer__hint";
+  hint.textContent = "Newest pours first · capped at 500";
+  footer.append(meta, hint);
+  element.appendChild(footer);
+
+  function setMeta(text) {
+    meta.textContent = text;
+  }
 
   let entries = [];
   let clearConfirmTimer = null;
@@ -118,7 +147,7 @@ export function adminHistoryView({ setMeta }) {
   }
 
   function render() {
-    element.innerHTML = "";
+    body.innerHTML = "";
 
     const toolbar = document.createElement("div");
     toolbar.className = "history-toolbar";
@@ -151,7 +180,7 @@ export function adminHistoryView({ setMeta }) {
     });
     toolbar.appendChild(clearBtn);
 
-    element.appendChild(toolbar);
+    body.appendChild(toolbar);
 
     if (entries.length === 0) {
       const empty = document.createElement("div");
@@ -161,12 +190,12 @@ export function adminHistoryView({ setMeta }) {
       sub.className = "history-empty__sub";
       sub.textContent = "Completed pours will appear here.";
       empty.appendChild(sub);
-      element.appendChild(empty);
+      body.appendChild(empty);
     } else {
       const list = document.createElement("div");
       list.className = "history-list";
       for (const e of entries) list.appendChild(historyRow(e));
-      element.appendChild(list);
+      body.appendChild(list);
     }
 
     updateMeta();
@@ -188,7 +217,7 @@ export function adminHistoryView({ setMeta }) {
       setMeta("Clearing…");
       await delJSON("/api/history");
       await refresh();
-      showToast("History cleared", { variant: "info", duration: 2500 });
+      showToast("History cleared", { variant: "success", duration: 2500 });
     } catch (e) {
       console.error(e);
       setMeta(`Clear failed — ${e.message}`);

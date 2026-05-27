@@ -1,4 +1,4 @@
-import { navigate } from "../app.js";
+import { navigate, resetStack } from "../app.js";
 import {
   adjustedIngredients,
   drinks,
@@ -17,14 +17,23 @@ import {
   flowRateForIngredient,
 } from "../calibration-store.js";
 import { ingredientName } from "../ingredients.js";
+import { abvReadout } from "../components/abv-readout.js";
 import {
   formatByHand,
+  formatDuration,
   formatGarnishList,
   formatIngredient,
-  formatTopUpList,
   joinList,
 } from "../format.js";
-import { getMachineStatus, onMachineStatus } from "../machine-status.js";
+import { onMachineStatus } from "../machine-status.js";
+import {
+  addToQueue,
+  onQueueChange,
+  isQueueFull,
+  canPourNow,
+  queueToasts,
+} from "../queue-store.js";
+import { showQueueToast } from "../components/toast.js";
 
 // Donut colors: the first four match the category accents so a drink's primary
 // ingredient reads in the category color; the rest are neutral fillers for
@@ -148,6 +157,47 @@ function pourButton({ accent, label, onClick }) {
   return btn;
 }
 
+function disabledPourButton({ accent, label }) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "pour-btn pour-btn--disabled";
+  btn.disabled = true;
+  btn.style.setProperty("--accent", accent);
+  btn.textContent = label;
+  return btn;
+}
+
+// The confirm-pour button. When the machine is free it pours immediately
+// ("Pour" → the pouring screen); when it's busy or a queue exists the SAME
+// button adds the drink to the shared queue instead of being disabled — that
+// is the whole point of the queue. The server decides which actually happens
+// (it owns the machine); the label is just a hint from current state.
+function pourActionButton({ accent, pourLabel, order }) {
+  if (isQueueFull()) {
+    return disabledPourButton({ accent, label: "Queue full — try shortly" });
+  }
+  return pourButton({
+    accent,
+    label: canPourNow() ? pourLabel : "Add to queue",
+    onClick: async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      const res = await addToQueue(order);
+      if (res.rejected) {
+        showQueueToast(queueToasts.full());
+        btn.disabled = false;
+      } else if (res.pouringNow) {
+        navigate("pouring", { order });
+      } else {
+        // Added behind a busy machine — land on the queue screen so the
+        // guest sees their drink in line and can manage the queue.
+        showQueueToast(queueToasts.added(res.position));
+        resetStack("idle", "queue");
+      }
+    },
+  });
+}
+
 function ingredientLine(text, { accent, outline = false } = {}) {
   const line = document.createElement("div");
   line.className = "detail-ing-line";
@@ -231,6 +281,14 @@ export function detail(props = {}) {
     ingredientsList.className = "detail-ingredients-list";
 
     const adjusted = adjustedIngredients(drink, order.strength, order.amount);
+    // Long recipes (Long Island, etc.) push the pour button below the fold
+    // when the list is single-column. Switch to 2-col once the list would
+    // exceed the donut's vertical footprint.
+    const totalListItems =
+      adjusted.length + (drink.garnish ? 1 : 0) + (drink.topUp ? 1 : 0);
+    if (totalListItems > 6) {
+      ingredientsList.classList.add("detail-ingredients-list--two-col");
+    }
     // Shortfalls compare *adjusted* volumes against current stock, so a "strong"
     // pour that would empty the bottle gets caught alongside a slot the admin
     // never loaded. Both flow into the same by-hand path below.
@@ -260,8 +318,14 @@ export function detail(props = {}) {
       );
     }
     if (drink.topUp) {
+      // Top-up is finished by hand; show its (amount-scaled) volume so it
+      // reads consistently with the machine-poured lines above.
+      const topUpOz = Number((drink.topUp.volumeOz * order.amount).toFixed(1));
       ingredientsList.appendChild(
-        ingredientLine(formatTopUpList(drink.topUp), { outline: true })
+        ingredientLine(
+          `${topUpOz} oz ${formatIngredient(drink.topUp.name)}`,
+          { outline: true }
+        )
       );
     }
 
@@ -273,6 +337,17 @@ export function detail(props = {}) {
     const machinePoured = adjusted.filter((i) => !shortfallByName.has(i.name));
     ingredientsWrap.appendChild(createDonutChart(machinePoured));
     right.appendChild(ingredientsWrap);
+
+    // ABV estimate covers the whole drink as served — the machine pour plus
+    // the by-hand top-up. The top-up tracks the amount slider (a 2× pour fills
+    // a bigger glass) but not strength.
+    const abvIngredients = drink.topUp
+      ? [
+          ...adjusted,
+          { name: drink.topUp.name, volumeOz: drink.topUp.volumeOz * order.amount },
+        ]
+      : adjusted;
+    right.appendChild(abvReadout(abvIngredients));
 
     right.appendChild(
       sliderControl({
@@ -299,46 +374,24 @@ export function detail(props = {}) {
       )
     );
 
-    const machineStatus = getMachineStatus();
-    const machineBusy = machineStatus.status !== "idle";
-    const busyLabel =
-      machineStatus.status === "pouring"
-        ? "Machine pouring · please wait"
-        : "Machine in maintenance · please wait";
-
     if (shortfalls.length === 0) {
       const seconds = estimatePourSeconds(drink, order.strength, order.amount, {
         flowRateForIngredient,
         defaultFlowOzPerSec: defaultFlowOzPerSec(),
       });
-      if (machineBusy) {
-        const disabled = document.createElement("button");
-        disabled.type = "button";
-        disabled.className = "pour-btn pour-btn--disabled";
-        disabled.disabled = true;
-        disabled.style.setProperty("--accent", cat.accent);
-        disabled.textContent = busyLabel;
-        right.appendChild(disabled);
-      } else {
-        right.appendChild(
-          pourButton({
-            accent: cat.accent,
-            label: `Pour · Ready in ~${seconds}s`,
-            onClick: (e) => {
-              e.currentTarget.disabled = true;
-              // Clear any stale by-hand list from a prior manual pour of this
-              // drink — otherwise the complete screen would tell the user to
-              // add ingredients we just dispensed.
-              setPendingOrder({ ...order, missingByHand: null });
-              navigate("pouring", { drinkId: drink.id });
-            },
-          })
-        );
-      }
+      // missingByHand cleared so the complete screen doesn't tell the user to
+      // add ingredients the machine just dispensed.
+      right.appendChild(
+        pourActionButton({
+          accent: cat.accent,
+          pourLabel: `Pour · Ready in ~${formatDuration(seconds)}`,
+          order: { ...order, missingByHand: null },
+        })
+      );
     } else if (!primaryShort) {
       // Primary is available — user can complete the recipe by hand. Snapshot
       // the by-hand list with strength/amount-adjusted volumes onto the
-      // pending order so the pouring + complete screens get the right amounts.
+      // order so the pouring + complete screens get the right amounts.
       const byHand = adjusted.filter((ing) => shortfallByName.has(ing.name));
       const banner = document.createElement("div");
       banner.className = "detail-missing-banner detail-missing-banner--byhand";
@@ -351,27 +404,13 @@ export function detail(props = {}) {
         .filter((ing) => !shortfallByName.has(ing.name))
         .reduce((s, i) => s + i.volumeOz, 0);
       const seconds = Math.round(15 + pouredVolume * 4.0);
-      if (machineBusy) {
-        const disabled = document.createElement("button");
-        disabled.type = "button";
-        disabled.className = "pour-btn pour-btn--disabled";
-        disabled.disabled = true;
-        disabled.style.setProperty("--accent", cat.accent);
-        disabled.textContent = busyLabel;
-        right.appendChild(disabled);
-      } else {
-        right.appendChild(
-          pourButton({
-            accent: cat.accent,
-            label: `Pour · Ready in ~${seconds}s`,
-            onClick: (e) => {
-              e.currentTarget.disabled = true;
-              setPendingOrder({ ...order, missingByHand: byHand });
-              navigate("pouring", { drinkId: drink.id });
-            },
-          })
-        );
-      }
+      right.appendChild(
+        pourActionButton({
+          accent: cat.accent,
+          pourLabel: `Pour · Ready in ~${formatDuration(seconds)}`,
+          order: { ...order, missingByHand: byHand },
+        })
+      );
     } else {
       // Primary itself is short — the recipe is structurally blocked. Distinguish
       // "no slot at all" (admin needs to load a bottle) from "slot empty / low"
@@ -413,9 +452,24 @@ export function detail(props = {}) {
       .join("|");
   }
 
+  // Signature of everything the pour button's label depends on — machine
+  // status and the shared queue. Re-render only when it changes so a
+  // background broadcast doesn't interrupt a slider drag.
+  function pourButtonSignature() {
+    return `${canPourNow()}|${isQueueFull()}`;
+  }
+
   render();
   let unsubMachine = null;
-  let lastStatus = getMachineStatus().status;
+  let unsubQueue = null;
+  let lastSig = pourButtonSignature();
+  function refreshIfChanged() {
+    const sig = pourButtonSignature();
+    if (sig !== lastSig) {
+      lastSig = sig;
+      render();
+    }
+  }
   return {
     element,
     mount() {
@@ -427,21 +481,19 @@ export function detail(props = {}) {
       loadInventory().then(() => {
         if (shortfallSignature() !== before) render();
       });
-      // Re-render when the machine flips between idle/busy from any source
-      // (another tablet starting a pour, maintenance finishing, etc.) so the
-      // pour button enables/disables in step. Skip mid-pour progress updates —
-      // status string is stable while a pour runs.
-      unsubMachine = onMachineStatus((s) => {
-        if (s.status !== lastStatus) {
-          lastStatus = s.status;
-          render();
-        }
-      });
+      // Re-render when the machine or the shared queue changes so the pour
+      // button tracks "Pour" vs "Add to queue" vs "Queue full" live.
+      unsubMachine = onMachineStatus(refreshIfChanged);
+      unsubQueue = onQueueChange(refreshIfChanged);
     },
     unmount() {
       if (unsubMachine) {
         unsubMachine();
         unsubMachine = null;
+      }
+      if (unsubQueue) {
+        unsubQueue();
+        unsubQueue = null;
       }
     },
   };

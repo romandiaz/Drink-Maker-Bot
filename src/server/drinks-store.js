@@ -11,6 +11,7 @@ import {
   replaceDrinks,
   EDITABLE_CATEGORY_IDS,
   GLASS_TYPES as GLASS_TYPE_LIST,
+  DEFAULT_TOPUP_OZ,
 } from "../drinks.js";
 import { slugify } from "../slug.js";
 
@@ -54,11 +55,33 @@ export async function load() {
   }
 }
 
+// Drop the cache and re-read from disk — used after a backup restore so the
+// running server reflects the restored file without a restart.
+export async function reloadFromDisk() {
+  cache = null;
+  await load();
+}
+
 function uniqueId(base) {
   if (!cache.some((d) => d.id === base)) return base;
   let n = 2;
   while (cache.some((d) => d.id === `${base}-${n}`)) n++;
   return `${base}-${n}`;
+}
+
+// Top-up may arrive as a bare string id (legacy) or { name, volumeOz }.
+// Normalize to the object form, or null when absent/invalid.
+function normalizeTopUp(t) {
+  if (!t) return null;
+  if (typeof t === "string") return { name: t, volumeOz: DEFAULT_TOPUP_OZ };
+  if (typeof t === "object" && typeof t.name === "string" && t.name) {
+    const oz = Number(t.volumeOz);
+    return {
+      name: t.name,
+      volumeOz: Number.isFinite(oz) && oz > 0 ? oz : DEFAULT_TOPUP_OZ,
+    };
+  }
+  return null;
 }
 
 // Shape-check and normalize a client payload. Unknown keys dropped; invalid
@@ -77,7 +100,7 @@ function normalize(input, { existingId } = {}) {
     ? input.color
     : "#888888";
   const garnish = typeof input.garnish === "string" && input.garnish ? input.garnish : null;
-  const topUp = typeof input.topUp === "string" && input.topUp ? input.topUp : null;
+  const topUp = normalizeTopUp(input.topUp);
   const needsIce = Boolean(input.needsIce);
 
   const rawIngredients = Array.isArray(input.ingredients) ? input.ingredients : [];

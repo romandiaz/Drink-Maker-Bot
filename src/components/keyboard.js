@@ -20,7 +20,15 @@ const BACK_SVG = `
   </svg>
 `;
 
-export function keyboard({ onLetter, onBackspace, extended = false, numbers = false } = {}) {
+export function keyboard({
+  onLetter,
+  onBackspace,
+  onEnter,
+  onPaste,
+  getValue,
+  extended = false,
+  numbers = false,
+} = {}) {
   const wrap = document.createElement("div");
   wrap.className = "keyboard";
 
@@ -110,21 +118,43 @@ export function keyboard({ onLetter, onBackspace, extended = false, numbers = fa
   }
 
   // Mirror physical-keyboard input through the same callbacks the on-screen
-  // buttons use, so a real USB/Bluetooth keyboard works at the dev desk.
-  // Self-removes once the wrap is detached from the DOM.
+  // buttons use, so a real USB/Bluetooth keyboard works at the dev desk and on
+  // a kiosk with a hardware keyboard attached. Letters/digits/space/punctuation
+  // route through onLetter; Enter, copy and paste are handled below. All three
+  // listeners self-remove once the keyboard leaves the DOM.
   let everConnected = false;
-  function handlePhysicalKey(e) {
+  function detached() {
     if (wrap.isConnected) {
       everConnected = true;
-    } else {
-      if (everConnected) document.removeEventListener("keydown", handlePhysicalKey);
-      return;
+      return false;
     }
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const t = e.target;
-    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    if (everConnected) {
+      document.removeEventListener("keydown", handlePhysicalKey);
+      document.removeEventListener("paste", handlePaste);
+      document.removeEventListener("copy", handleCopy);
+    }
+    return true;
+  }
+
+  // True when a real editable element holds focus — leave clipboard/keys to it.
+  function editableTarget(t) {
+    return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+  }
+
+  function handlePhysicalKey(e) {
+    if (detached()) return;
+    if (editableTarget(e.target)) return;
 
     const key = e.key;
+    if (key === "Enter") {
+      // Enter confirms — same as tapping the screen's primary action button.
+      if (onEnter) {
+        e.preventDefault();
+        onEnter();
+      }
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return; // copy/paste handled separately
     if (key === "Backspace") {
       e.preventDefault();
       onBackspace?.();
@@ -147,7 +177,33 @@ export function keyboard({ onLetter, onBackspace, extended = false, numbers = fa
       onLetter?.(key);
     }
   }
+
+  // Ctrl/Cmd+V — Chromium fires `paste` on the document even with no field
+  // focused. These are single-line fields, so keep only the first pasted line
+  // and drop control characters.
+  function handlePaste(e) {
+    if (detached()) return;
+    if (!onPaste || editableTarget(e.target)) return;
+    const raw = e.clipboardData?.getData("text") || "";
+    const text = raw.split(/[\r\n]/)[0].replace(/[\u0000-\u001F]/g, "").trim();
+    if (!text) return;
+    e.preventDefault();
+    onPaste(text);
+  }
+
+  // Ctrl/Cmd+C — there's no cursor/selection model, so copy the whole field.
+  function handleCopy(e) {
+    if (detached()) return;
+    if (!getValue || editableTarget(e.target)) return;
+    const value = getValue();
+    if (value == null || value === "") return;
+    e.clipboardData?.setData("text/plain", String(value));
+    e.preventDefault();
+  }
+
   document.addEventListener("keydown", handlePhysicalKey);
+  document.addEventListener("paste", handlePaste);
+  document.addEventListener("copy", handleCopy);
 
   return wrap;
 }

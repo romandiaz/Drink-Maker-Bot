@@ -1,4 +1,9 @@
-import { categories, EDITABLE_CATEGORY_IDS, GLASS_TYPES } from "../drinks.js";
+import {
+  categories,
+  EDITABLE_CATEGORY_IDS,
+  GLASS_TYPES,
+  DEFAULT_TOPUP_OZ,
+} from "../drinks.js";
 import { ingredientPicker } from "./ingredient-picker.js";
 import { textInputModal } from "./text-input-modal.js";
 import { topUpIds } from "../format.js";
@@ -8,6 +13,7 @@ import {
   textField,
   colorPalette,
   ingredientRow,
+  volumeStepper,
 } from "./editor-fields.js";
 
 // Full-screen editor for adding or editing one drink. Hosts its own modals
@@ -18,7 +24,7 @@ const EDITABLE_CATEGORIES = EDITABLE_CATEGORY_IDS
   .map((id) => categories.find((c) => c.id === id))
   .filter(Boolean);
 const GARNISHES = [
-  "olive", "cherry", "lemon-wedge", "lime-wedge", "orange-peel",
+  "olive", "cherry", "mint-sprig", "lemon-wedge", "lime-wedge", "orange-peel",
   "salt-rim-lime", "chili-rim",
 ];
 // Top-ups are post-pour ingredients the user adds themselves (the machine
@@ -40,7 +46,9 @@ function makeDraft(drink) {
     glassType: drink?.glassType ?? "rocks",
     color: drink?.color ?? COLOR_PALETTE[0],
     garnish: drink?.garnish ?? null,
-    topUp: drink?.topUp ?? null,
+    // topUp is { name, volumeOz } — copy so stepper edits don't mutate the
+    // source drink before save.
+    topUp: drink?.topUp ? { ...drink.topUp } : null,
     needsIce: drink?.needsIce ?? false,
     // Preserve the enabled flag through round-trip edits — editor doesn't
     // expose a field for it (toggle lives on the recipe card), but the
@@ -139,12 +147,20 @@ export function drinkEditor({ drink, onSave, onCancel, onDelete, title }) {
     overlay.appendChild(modal);
   }
 
+  // idx === null means "add a new row" — only append once the user picks
+  // something, so cancelling leaves the list untouched (matches build-your-own).
   function openIngredientPicker(idx) {
     const picker = ingredientPicker({
-      current: draft.ingredients[idx]?.name ?? null,
+      current: idx === null ? null : draft.ingredients[idx]?.name ?? null,
       onCancel: () => picker.remove(),
       onPick: (id) => {
-        if (id) draft.ingredients[idx].name = id;
+        if (id) {
+          if (idx === null) {
+            draft.ingredients.push({ name: id, volumeOz: 0.5 });
+          } else {
+            draft.ingredients[idx].name = id;
+          }
+        }
         picker.remove();
         render();
       },
@@ -170,10 +186,7 @@ export function drinkEditor({ drink, onSave, onCancel, onDelete, title }) {
     add.type = "button";
     add.className = "editor-ing-add tappable";
     add.textContent = "+ Add ingredient";
-    add.addEventListener("click", () => {
-      draft.ingredients.push({ name: "gin", volumeOz: 0.5 });
-      render();
-    });
+    add.addEventListener("click", () => openIngredientPicker(null));
     wrap.appendChild(add);
     return wrap;
   }
@@ -217,10 +230,22 @@ export function drinkEditor({ drink, onSave, onCancel, onDelete, title }) {
 
     body.appendChild(fieldRow("Top-up", segmented({
       options: [null, ...TOP_UPS],
-      value: draft.topUp,
+      value: draft.topUp?.name ?? null,
       labelOf: (t) => t === null ? "None" : t.replace(/-/g, " "),
-      onChange: (v) => { draft.topUp = v; render(); },
+      onChange: (v) => {
+        draft.topUp = v
+          ? { name: v, volumeOz: draft.topUp?.volumeOz ?? DEFAULT_TOPUP_OZ }
+          : null;
+        render();
+      },
     })));
+
+    if (draft.topUp) {
+      body.appendChild(fieldRow("Top-up amount", volumeStepper(
+        draft.topUp.volumeOz,
+        (oz) => { draft.topUp.volumeOz = oz; render(); }
+      )));
+    }
 
     body.appendChild(fieldRow("Ice needed", segmented({
       options: [false, true],

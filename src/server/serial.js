@@ -20,6 +20,12 @@ let reconnectTimer = null;
 let nextSeqId = 1;
 const queue = [];
 
+// USB vendor IDs accepted when SERIAL_PORT is "auto": Arduino's own VID,
+// the newer Arduino LLC VID, and the common clone USB-serial bridges
+// (CH340, FTDI, CP210x). If your board doesn't match, set SERIAL_PORT to
+// its explicit device path instead of "auto".
+const ARDUINO_VIDS = new Set(["2341", "2a03", "1a86", "0403", "10c4"]);
+
 const READY_TIMEOUT_MS = 5000;
 // Generous per-command ceiling. A single-ingredient POUR is the longest
 // thing we send; at typical pump flow rates a 6oz pour finishes well
@@ -53,13 +59,49 @@ export function isSerialReady() {
 
 export async function openSerial(portPath) {
   if (port) throw new Error("serial port already open");
-  savedPath = portPath;
-  await connectOnce();
+  // Empty / unset / "auto" all mean "find the Arduino by USB VID:PID at
+  // connect time" — this also covers re-enumeration order changes (the
+  // board reappearing as ttyACM1 after a replug, or under a different
+  // driver) without an install-script rerun.
+  savedPath = portPath || "auto";
+  // The initial open is no longer fatal: if the Arduino hasn't enumerated
+  // yet at cold boot, or the cable is flaky, funnel the failure into the
+  // same reconnect loop the close handler uses. Returning successfully
+  // either way means the backend stays up and the rest of the kiosk UI
+  // works; pours just reject with "serial not ready" until the link
+  // comes back.
+  try {
+    await connectOnce();
+  } catch (err) {
+    console.error(`serial open failed: ${err.message}; will keep retrying`);
+    scheduleReconnect(RECONNECT_INITIAL_MS);
+  }
+}
+
+async function resolveSerialPath(preferred) {
+  const ports = await SerialPort.list();
+  if (preferred && preferred !== "auto") {
+    // Preferred path wins when it's actually enumerated. If it's missing
+    // (kernel re-enumerated ttyACM0 → ttyACM1, USB driver swap, replug
+    // race) fall through to the VID scan rather than looping forever on
+    // a path that will never appear.
+    if (ports.some((p) => p.path === preferred)) return preferred;
+  }
+  const match = ports.find((p) => ARDUINO_VIDS.has((p.vendorId || "").toLowerCase()));
+  return match ? match.path : null;
 }
 
 async function connectOnce() {
+  const path = await resolveSerialPath(savedPath);
+  if (!path) {
+    throw new Error(
+      savedPath === "auto"
+        ? "no Arduino-like USB serial device detected"
+        : `device not present: ${savedPath}`
+    );
+  }
   await new Promise((resolveOpen, rejectOpen) => {
-    port = new SerialPort({ path: savedPath, baudRate: 115200 }, (err) => {
+    port = new SerialPort({ path, baudRate: 115200 }, (err) => {
       if (err) {
         // Reset state so a retry can re-open cleanly.
         port = null;
@@ -156,9 +198,11 @@ async function connectOnce() {
     throw err;
   }
 
-  // Only attach the close handler after a successful handshake. Otherwise
-  // a failed initial open would trigger an endless reconnect loop on a
-  // misconfigured SERIAL_PORT — better to fail loudly at startup.
+  console.log(`serial port connected on ${path}`);
+
+  // Only attach the close handler after a successful handshake — the
+  // pre-handshake error path above already cleans up `port` and rethrows,
+  // which openSerial / scheduleReconnect catch to schedule the next retry.
   port.on("close", () => {
     console.error("serial port closed; will attempt to reconnect");
     ready = false;

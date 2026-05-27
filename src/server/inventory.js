@@ -1,17 +1,20 @@
-// Physical-pump inventory: one row per pump slot, persisted to JSON.
-// The admin screen edits this; mockPour() decrements remainingOz on completion.
+// Physical-pump inventory: one row per pump slot, persisted to JSON. A slot
+// records only what's physical to it — which ingredient is loaded and how much
+// volume is left. Bottle size, cost, and ABV are attributes of the ingredient
+// itself and live in ingredients-store.js, so they persist when an ingredient
+// is unloaded. The admin screen edits this; mockPour() decrements remainingOz.
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DEFAULT_BOTTLE_OZ } from "../ingredient-defaults.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE_DIR = resolve(__dirname, "state");
 const INVENTORY_PATH = resolve(STATE_DIR, "inventory.json");
 
 const SLOT_COUNT = 16;
-const DEFAULT_CAPACITY_OZ = 25; // ~750ml bottle
 
 // Seed used on first boot when no inventory.json exists. The 16 defaults
 // cover every ingredient referenced by the stock recipe set, so a fresh
@@ -20,7 +23,7 @@ const SEED_SLOTS = [
   "gin",
   "vodka",
   "whiskey",
-  "rum",
+  "light-rum",
   "tequila",
   "campari",
   "sweet-vermouth",
@@ -41,36 +44,55 @@ function emptyInventory() {
     slots.push({
       slot: i + 1,
       ingredientId: SEED_SLOTS[i] ?? null,
-      capacityOz: DEFAULT_CAPACITY_OZ,
-      remainingOz: SEED_SLOTS[i] ? DEFAULT_CAPACITY_OZ : 0,
+      // A freshly-seeded slot starts full at the default bottle size.
+      remainingOz: SEED_SLOTS[i] ? DEFAULT_BOTTLE_OZ : 0,
     });
   }
   return { slots, updatedAt: new Date().toISOString() };
 }
 
 let cache = null;
+const listeners = new Set();
 
-// If SLOT_COUNT changes between versions, pad existing files with empty slots
-// (or truncate extras) so the rest of the code can always assume the canonical
-// row count. Any newly-added rows start empty; no auto-assignment.
+// Notify subscribers (index.js wires this to a WS broadcast) so every
+// connected tablet's inventory-store cache stays in sync without polling.
+export function subscribe(listener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+function emit() {
+  for (const l of listeners) {
+    try { l(cache); } catch (e) { console.error("inventory listener error:", e); }
+  }
+}
+
+// Bring a loaded file up to the current shape: pad/truncate to SLOT_COUNT rows
+// and drop the legacy per-slot capacityOz / costPerBottle fields (those moved
+// to ingredients-store.js). Returns `raw` unchanged when nothing needed fixing
+// so the caller can skip a redundant re-write; otherwise a fresh object.
 function normalizeToSlotCount(raw) {
   const src = Array.isArray(raw.slots) ? raw.slots : [];
-  if (src.length === SLOT_COUNT) return raw;
+  let changed = src.length !== SLOT_COUNT;
   const slots = [];
   for (let i = 0; i < SLOT_COUNT; i++) {
     const existing = src[i];
     if (existing) {
-      slots.push({ ...existing, slot: i + 1 });
-    } else {
+      if ("capacityOz" in existing || "costPerBottle" in existing) changed = true;
       slots.push({
         slot: i + 1,
-        ingredientId: null,
-        capacityOz: DEFAULT_CAPACITY_OZ,
-        remainingOz: 0,
+        ingredientId:
+          typeof existing.ingredientId === "string" && existing.ingredientId
+            ? existing.ingredientId
+            : null,
+        remainingOz: Number.isFinite(existing.remainingOz)
+          ? Math.max(0, Number(existing.remainingOz))
+          : 0,
       });
+    } else {
+      slots.push({ slot: i + 1, ingredientId: null, remainingOz: 0 });
     }
   }
-  return { slots, updatedAt: new Date().toISOString() };
+  return changed ? { slots, updatedAt: new Date().toISOString() } : raw;
 }
 
 export async function loadInventory() {
@@ -102,7 +124,10 @@ async function persist(inventory) {
 }
 
 // Normalize a client-supplied payload so garbage fields don't leak into the
-// file. Shape matches emptyInventory(); unknown keys are dropped.
+// file. Shape matches emptyInventory(); unknown keys (including legacy
+// capacityOz / costPerBottle) are dropped. remainingOz is no longer clamped to
+// a capacity here — bottle size lives on the ingredient now — so the display
+// caps the fill bar at 100% instead.
 function sanitize(payload) {
   if (!payload || !Array.isArray(payload.slots)) return null;
   const slots = [];
@@ -112,16 +137,12 @@ function sanitize(payload) {
       typeof src.ingredientId === "string" && src.ingredientId
         ? src.ingredientId
         : null;
-    const capacityOz = Number.isFinite(src.capacityOz)
-      ? Math.max(0, Number(src.capacityOz))
-      : DEFAULT_CAPACITY_OZ;
     const remainingOz = Number.isFinite(src.remainingOz)
-      ? Math.max(0, Math.min(capacityOz, Number(src.remainingOz)))
+      ? Math.max(0, Number(src.remainingOz))
       : 0;
     slots.push({
       slot: i + 1,
       ingredientId,
-      capacityOz: Number(capacityOz.toFixed(2)),
       remainingOz: Number(remainingOz.toFixed(2)),
     });
   }
@@ -133,7 +154,16 @@ export async function saveInventory(payload) {
   if (!clean) throw new Error("invalid inventory payload");
   cache = clean;
   await persist(cache);
+  emit();
   return cache;
+}
+
+// Re-read from disk after a backup restore, then notify subscribers so every
+// tablet's inventory cache refreshes.
+export async function reloadFromDisk() {
+  cache = null;
+  await loadInventory();
+  emit();
 }
 
 // Deduct `ingredients` from the first matching slot for each ID. Slots with
@@ -151,5 +181,6 @@ export async function consume(ingredients) {
   }
   inv.updatedAt = new Date().toISOString();
   await persist(inv);
+  emit();
   return inv;
 }

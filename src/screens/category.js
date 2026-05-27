@@ -7,6 +7,7 @@ import {
 } from "../drinks.js";
 import { header, readyIndicator, adminButton } from "../components/header.js";
 import { glass } from "../components/glass.js";
+import { DICE_SVG } from "../icons.js";
 import { setCurrentCategory } from "../state.js";
 import { isDrinkPourable, loadedIngredientCount, slotCount } from "../inventory-store.js";
 import { isCategoryEnabled } from "../category-store.js";
@@ -130,6 +131,31 @@ function buildPill() {
   return btn;
 }
 
+// Third sibling in the pill row: spins a slot-machine reel that lands on a
+// random pourable drink. A low-commitment entry point for guests who don't
+// want to browse.
+function surprisePill() {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "shots-pill surprise-pill tappable";
+
+  const iconSlot = document.createElement("span");
+  iconSlot.className = "shots-pill__glass surprise-pill__icon";
+  iconSlot.innerHTML = DICE_SVG;
+  btn.appendChild(iconSlot);
+
+  const label = document.createElement("span");
+  label.className = "shots-pill__label";
+  label.textContent = "Surprise me →";
+  btn.appendChild(label);
+
+  btn.addEventListener("click", () => {
+    navigate("surprise");
+  });
+
+  return btn;
+}
+
 export function category() {
   const element = document.createElement("section");
   element.className = "screen";
@@ -167,6 +193,7 @@ export function category() {
   shotsRow.className = "category-shots-row";
   if (isCategoryEnabled("shots")) shotsRow.appendChild(shotsPill());
   shotsRow.appendChild(buildPill());
+  shotsRow.appendChild(surprisePill());
   element.appendChild(shotsRow);
 
   const footer = document.createElement("footer");

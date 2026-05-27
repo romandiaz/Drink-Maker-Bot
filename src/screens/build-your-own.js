@@ -1,7 +1,7 @@
-import { navigate } from "../app.js";
+import { navigate, resetStack } from "../app.js";
 import { header } from "../components/header.js";
 import { layeredGlass } from "../components/glass.js";
-import { appState, setPendingOrder } from "../state.js";
+import { appState } from "../state.js";
 import { ingredientName } from "../ingredients.js";
 import {
   loadInventory,
@@ -12,14 +12,22 @@ import { ingredientPicker } from "../components/ingredient-picker.js";
 import { ingredientRow } from "../components/editor-fields.js";
 import { textInputModal } from "../components/text-input-modal.js";
 import { postJSON } from "../api.js";
-import { showToast } from "../components/toast.js";
+import { showQueueToast } from "../components/toast.js";
 import { slugify } from "../slug.js";
 import { estimatePourSeconds } from "../drinks.js";
+import { formatDuration } from "../format.js";
 import {
   defaultFlowOzPerSec,
   flowRateForIngredient,
 } from "../calibration-store.js";
-import { getMachineStatus, onMachineStatus } from "../machine-status.js";
+import { onMachineStatus } from "../machine-status.js";
+import {
+  addToQueue,
+  onQueueChange,
+  isQueueFull,
+  canPourNow,
+  queueToasts,
+} from "../queue-store.js";
 
 // Smallest pour the screen will let an individual ingredient sit at — anything
 // below this is treated as "skip this row" rather than dispensing a dribble.
@@ -311,29 +319,28 @@ export function buildYourOwn() {
       stockNote.hidden = false;
     }
 
-    // Pour button — machine status takes priority over recipe state so the
-    // user gets a single clear reason the button is disabled (busy beats
-    // missing-ingredients).
-    const machineStatus = getMachineStatus();
-    const machineBusy = machineStatus.status !== "idle";
-    const ok = canPour();
-    pourBtn.disabled = machineBusy || !ok;
-    if (machineBusy) {
-      pourBtn.textContent =
-        machineStatus.status === "pouring"
-          ? "Machine pouring · please wait"
-          : "Machine in maintenance · please wait";
-    } else if (!ok) {
+    // Pour button. An invalid recipe is reported first — the user must fix it
+    // regardless of machine state. Otherwise the same button pours now (free
+    // machine) or adds the drink to the shared queue.
+    if (!canPour()) {
+      pourBtn.disabled = true;
       pourBtn.textContent = draft.ingredients.length === 0
         ? "Add an ingredient to start"
         : "Pick at least one ingredient";
-    } else {
+    } else if (isQueueFull()) {
+      pourBtn.disabled = true;
+      pourBtn.textContent = "Queue full — try shortly";
+    } else if (canPourNow()) {
+      pourBtn.disabled = false;
       const preview = buildCustomDrink(draft);
       const seconds = estimatePourSeconds(preview, "regular", 1.0, {
         flowRateForIngredient,
         defaultFlowOzPerSec: defaultFlowOzPerSec(),
       });
-      pourBtn.textContent = `Pour · ~${seconds}s`;
+      pourBtn.textContent = `Pour · ~${formatDuration(seconds)}`;
+    } else {
+      pourBtn.disabled = false;
+      pourBtn.textContent = "Add to queue";
     }
 
     paintGlass();
@@ -343,7 +350,6 @@ export function buildYourOwn() {
 
   async function onPour() {
     if (!canPour()) return;
-    if (getMachineStatus().status !== "idle") return;
     pourBtn.disabled = true;
     const customDrink = buildCustomDrink(draft);
     // Save first so the submission is durable even if the pour fails / is
@@ -357,41 +363,64 @@ export function buildYourOwn() {
     } catch (e) {
       console.error("submission save failed", e);
     }
-    setPendingOrder({
+    const order = {
       drinkId: customDrink.id,
       strength: "regular",
       amount: 1.0,
       customDrink,
-    });
-    navigate("pouring", { drinkId: customDrink.id });
+    };
+    // Pours now if the machine is free, otherwise joins the shared queue.
+    const res = await addToQueue(order);
+    if (res.rejected) {
+      showQueueToast(queueToasts.full());
+      render();
+    } else if (res.pouringNow) {
+      navigate("pouring", { order });
+    } else {
+      // Queued behind a busy machine — land on the queue screen.
+      showQueueToast(queueToasts.added(res.position));
+      resetStack("idle", "queue");
+    }
   }
 
   // ---------- Lifecycle ----------
 
+  // Signature of the machine + queue state the pour button depends on, so a
+  // background broadcast only re-renders when it actually changes the button.
+  function pourButtonSignature() {
+    return `${canPourNow()}|${isQueueFull()}`;
+  }
+
   render();
   let unsubMachine = null;
-  let lastStatus = getMachineStatus().status;
+  let unsubQueue = null;
+  let lastSig = pourButtonSignature();
+  function refreshIfChanged() {
+    const sig = pourButtonSignature();
+    if (sig !== lastSig) {
+      lastSig = sig;
+      render();
+    }
+  }
   return {
     element,
     mount() {
       // Inventory may have changed since the last visit — refresh so stock
       // notes and the pour button reflect what's actually in the bottles.
       loadInventory().then(render);
-      // Re-render when the machine flips between idle/busy (another tablet
-      // started a pour, maintenance finished, etc.) so the pour button label
-      // and disabled state stay in sync. Skip mid-pour progress updates —
-      // status string is stable while a pour runs.
-      unsubMachine = onMachineStatus((s) => {
-        if (s.status !== lastStatus) {
-          lastStatus = s.status;
-          render();
-        }
-      });
+      // Re-render when the machine or the shared queue changes so the pour
+      // button tracks "Pour" vs "Add to queue" vs "Queue full" live.
+      unsubMachine = onMachineStatus(refreshIfChanged);
+      unsubQueue = onQueueChange(refreshIfChanged);
     },
     unmount() {
       if (unsubMachine) {
         unsubMachine();
         unsubMachine = null;
+      }
+      if (unsubQueue) {
+        unsubQueue();
+        unsubQueue = null;
       }
     },
   };

@@ -1,0 +1,72 @@
+/* Shared component styles used by both the kiosk (index.html) and the mobile
+   order page (order.html). Add a rule here when a control needs to look the
+   same on both surfaces — editing it here ripples everywhere. */
+
+/* Destructive icon button used to drop a drink from the queue. Same treatment
+   on both surfaces: a 44×44 circle (meets the touch-target minimum directly,
+   no invisible padding hack) tinted with --accent-shots so the destructive
+   intent reads at a glance without shouting. */
+.queue-remove-btn {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent-shots) 30%, transparent);
+  background: color-mix(in srgb, var(--accent-shots) 10%, transparent);
+  color: var(--accent-shots);
+  display: grid;
+  place-items: center;
+  cursor: none;
+  transition: background 120ms ease-out, transform 120ms ease-out;
+}
+.queue-remove-btn:active {
+  background: color-mix(in srgb, var(--accent-shots) 20%, transparent);
+  transform: scale(0.96);
+}
+.queue-remove-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+/* Compact "Estimated ≈ N% ABV · N.N standard drinks" line shown on the drink
+   detail (kiosk) and order sheet (mobile). Three inline spans separated by a
+   middle dot: small uppercase label, primary value, secondary std-drinks. */
+.abv-readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 11px;
+}
+.abv-readout__label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.abv-readout__value {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.abv-readout__std {
+  color: var(--text-tertiary);
+}
+.abv-readout__std::before {
+  content: "·";
+  margin-right: 6px;
+  color: var(--text-quaternary);
+}
+
+/* Fullscreen non-interactive canvas used by confetti.js to celebrate a
+   guest's drink being up. Mounted on demand and removed when the burst
+   finishes — z-index sits above everything else on the page. */
+.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+}

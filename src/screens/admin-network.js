@@ -192,7 +192,7 @@ export function adminNetworkView({ host, setMeta }) {
             setBusy(true);
             try {
               await postJSON("/api/network/connect", { ssid: n.ssid, password: psk });
-              showToast(`Connected to ${n.ssid}`, { variant: "info" });
+              showToast(`Connected to ${n.ssid}`, { variant: "success" });
               await refreshAll();
             } catch (e) {
               showToast(`Connect failed — ${e.message}`);
@@ -210,7 +210,7 @@ export function adminNetworkView({ host, setMeta }) {
       const savedConn = (saved || []).find((c) => c.ssid === n.ssid && !c.isHotspot);
       if (savedConn) await postJSON("/api/network/connect", { name: savedConn.name });
       else await postJSON("/api/network/connect", { ssid: n.ssid });
-      showToast(`Connected to ${n.ssid}`, { variant: "info" });
+      showToast(`Connected to ${n.ssid}`, { variant: "success" });
       await refreshAll();
     } catch (e) {
       showToast(`Connect failed — ${e.message}`);
@@ -279,6 +279,24 @@ export function adminNetworkView({ host, setMeta }) {
         const noun = status.clientCount === 1 ? "device" : "devices";
         c.appendChild(kv("Connected", `${status.clientCount} ${noun}`));
       }
+
+      const clearBtn = document.createElement("button");
+      clearBtn.type = "button";
+      clearBtn.className = "net-btn net-btn--warn tappable";
+      clearBtn.style.marginTop = "1rem";
+      clearBtn.textContent = "Clear Connected Clients";
+      clearBtn.addEventListener("click", async () => {
+        setBusy(true);
+        try {
+          await delJSON("/api/network/clients");
+          showToast("Clients cleared. Devices must reconnect.", { variant: "success" });
+          await refreshAll();
+        } catch (e) {
+          showToast(`Clear failed — ${e.message}`);
+        } finally { setBusy(false); }
+      });
+      c.appendChild(clearBtn);
+
     } else {
       c.appendChild(noteP("Switch to Host mode to broadcast this network."));
     }
@@ -290,7 +308,7 @@ export function adminNetworkView({ host, setMeta }) {
     setBusy(true);
     try {
       await putJSON("/api/network/hotspot", cfg);
-      showToast("Hotspot updated", { variant: "info" });
+      showToast("Hotspot updated", { variant: "success" });
       await refreshAll();
     } catch (e) {
       showToast(`Save failed — ${e.message}`);
@@ -391,6 +409,9 @@ export function adminNetworkView({ host, setMeta }) {
       numbers: true,
       onLetter: (ch) => { value += ch; paint(); },
       onBackspace: () => { value = value.slice(0, -1); paint(); },
+      onEnter: () => { close(); Promise.resolve(onSubmit(value)).catch(() => {}); },
+      onPaste: (text) => { value += text; paint(); },
+      getValue: () => value,
     }));
 
     const actions = document.createElement("div");

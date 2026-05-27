@@ -26,26 +26,32 @@ export function formatGarnishProse(g) {
   return `${article} ${noun}`;
 }
 
-// Top-up display labels. Most read as "splash of X"; beer is poetically a
-// "float". Falls back to "splash of {id}" for unknown IDs so an admin can add
-// a new top-up via the editor without touching this file.
-const TOP_UP_LABELS = {
-  "ginger-beer": { list: "splash of ginger beer", prose: "a splash of ginger beer" },
-  "cola": { list: "splash of cola", prose: "a splash of cola" },
-  "mexican-beer": { list: "Mexican beer float", prose: "a Mexican beer float" },
-  "tonic": { list: "splash of tonic", prose: "a splash of tonic" },
-};
+// Known post-pour top-up ingredients — the shortlist the recipe editor offers.
+// An admin can still set a top-up to any ingredient; this just feeds the
+// editor's dropdown via topUpIds().
+const TOP_UP_IDS = ["ginger-beer", "cola", "lemon-lime-soda", "mexican-beer", "tonic"];
 
-export function formatTopUpList(id) {
-  return TOP_UP_LABELS[id]?.list ?? `splash of ${formatIngredient(id)}`;
-}
-
-export function formatTopUpProse(id) {
-  return TOP_UP_LABELS[id]?.prose ?? `a splash of ${formatIngredient(id)}`;
+// Top-up as a finish instruction with its actual volume. The machine doesn't
+// pour it, so the reminder names the amount — "4.0 oz ginger beer" — instead of
+// the old "a splash of…", which undersold multi-ounce top-ups. `amount` scales
+// it the same way the pour scales (a 2× drink tops up with 2× mixer).
+export function formatTopUpProse(topUp, amount = 1) {
+  const oz = (topUp.volumeOz || 0) * amount;
+  return `${oz.toFixed(1)} oz ${formatIngredient(topUp.name)}`;
 }
 
 export function topUpIds() {
-  return Object.keys(TOP_UP_LABELS);
+  return TOP_UP_IDS;
+}
+
+// Render a duration in seconds as "45s" / "2m" / "2m 15s". Pour estimates can
+// run past a minute, and a bare "135s" reads worse than "2m 15s".
+export function formatDuration(totalSeconds) {
+  const s = Math.max(0, Math.round(totalSeconds));
+  if (s < 60) return `${s}s`;
+  const minutes = Math.floor(s / 60);
+  const seconds = s % 60;
+  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
 }
 
 // Oxford-comma list join. "A" → "A"; "A,B" → "A and B"; "A,B,C" → "A, B, and C".

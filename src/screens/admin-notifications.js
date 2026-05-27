@@ -33,16 +33,19 @@ function timeLabel(iso) {
   return `${month} ${day} · ${time}`;
 }
 
+const VARIANT_LABELS = { success: "Success", info: "Info", error: "Error" };
+
 function notificationRow(entry) {
   const row = document.createElement("div");
   row.className = "history-row notification-row";
-  row.dataset.variant = entry.variant === "info" ? "info" : "error";
+  const variant = VARIANT_LABELS[entry.variant] ? entry.variant : "error";
+  row.dataset.variant = variant;
 
   const head = document.createElement("div");
   head.className = "history-row__head";
   const label = document.createElement("div");
   label.className = "history-row__name";
-  label.textContent = entry.variant === "info" ? "Info" : "Error";
+  label.textContent = VARIANT_LABELS[variant];
   const time = document.createElement("div");
   time.className = "history-row__time";
   time.textContent = timeLabel(entry.ts);
@@ -98,7 +101,7 @@ export function notifications() {
       setMeta("No notifications");
       return;
     }
-    const errs = entries.filter((e) => e.variant !== "info").length;
+    const errs = entries.filter((e) => e.variant === "error").length;
     setMeta(`${n} notification${n === 1 ? "" : "s"} · ${errs} error${errs === 1 ? "" : "s"}`);
   }
 
@@ -161,6 +164,9 @@ export function notifications() {
     try {
       const data = await getJSON("/api/notifications");
       entries = Array.isArray(data.entries) ? data.entries : [];
+      if (entries.length > 0) {
+        localStorage.setItem("lastSeenNotification", entries[0].ts);
+      }
     } catch (e) {
       entries = [];
       showToast(`Couldn't load notifications — ${e.message}`);
@@ -175,7 +181,7 @@ export function notifications() {
       await refresh();
       // Skip the toast log here — clearing and immediately re-adding a
       // "Notifications cleared" entry as the first row reads as a bug.
-      showToast("Notifications cleared", { variant: "info", duration: 2500, log: false });
+      showToast("Notifications cleared", { variant: "success", duration: 2500, log: false });
     } catch (e) {
       console.error(e);
       setMeta(`Clear failed — ${e.message}`);

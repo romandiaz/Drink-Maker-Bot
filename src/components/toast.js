@@ -2,15 +2,21 @@
 // screens. Calling showToast() replaces any visible toast — we don't queue,
 // because layered errors are confusing and the latest is usually most relevant.
 //
-// Variants: 'error' (default) for failures, 'info' for neutral status.
+// Variants: 'error' (default) for failures, 'success' for completed
+// operations, 'info' for neutral status.
 // Duration defaults to 4000ms; pass duration: 0 to require a tap dismiss.
 
 let rootEl = null;
 let labelEl = null;
+let scrimEl = null;
 let hideTimer = null;
 
 function ensureMounted() {
   if (rootEl) return;
+  scrimEl = document.createElement("div");
+  scrimEl.className = "toast-scrim";
+  document.body.appendChild(scrimEl);
+
   rootEl = document.createElement("div");
   rootEl.className = "toast";
   rootEl.setAttribute("role", "status");
@@ -38,8 +44,10 @@ export function showToast(message, opts = {}) {
   rootEl.dataset.variant = variant;
   // Force reflow so re-showing the same toast re-triggers the enter transition.
   rootEl.classList.remove("is-visible");
+  scrimEl.classList.remove("is-visible");
   void rootEl.offsetHeight;
   rootEl.classList.add("is-visible");
+  scrimEl.classList.add("is-visible");
 
   if (duration > 0) {
     hideTimer = setTimeout(hideToast, duration);
@@ -58,9 +66,18 @@ export function showToast(message, opts = {}) {
   }
 }
 
+// Fire a queue-lifecycle toast. Queue events are transient confirmations,
+// not errors worth replaying, so log: false is hard-coded. Callers pass a
+// spec from queueToasts in queue-store.js so the variant + wording for each
+// event lives in one place.
+export function showQueueToast(spec, opts = {}) {
+  showToast(spec.message, { variant: spec.variant, log: false, ...opts });
+}
+
 export function hideToast() {
   if (!rootEl) return;
   rootEl.classList.remove("is-visible");
+  scrimEl.classList.remove("is-visible");
   if (hideTimer) {
     clearTimeout(hideTimer);
     hideTimer = null;

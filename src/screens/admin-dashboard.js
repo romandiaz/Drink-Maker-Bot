@@ -1,9 +1,10 @@
 import { drinks, getCategoryById, isDrinkEnabled } from "../drinks.js";
 import { ingredientName } from "../ingredients.js";
-import { isDrinkPourable, bottleStatus } from "../inventory-store.js";
+import { isDrinkPourable, bottleStatus, barValue } from "../inventory-store.js";
 import { reloadInventory, reloadDrinks, reloadCategoriesConfig } from "../app.js";
 import { isCategoryEnabled } from "../category-store.js";
 import { getJSON } from "../api.js";
+import { navigate } from "../app.js";
 import { showToast } from "../components/toast.js";
 import { createDonut } from "../components/donut.js";
 
@@ -141,6 +142,11 @@ function topDrinksCard(stats) {
   }));
   body.appendChild(buildList(rows, (r) => `${r.count}`));
 
+  // With pours logged, the card drills into the full drink leaderboard. The
+  // empty state above returns early, so it stays inert.
+  card.classList.add("dash-card--shortcut", "tappable");
+  card.addEventListener("click", () => navigate("drinkStats"));
+
   return card;
 }
 
@@ -179,6 +185,11 @@ function topIngredientsCard(stats) {
     color: FALLBACK_PALETTE[i % FALLBACK_PALETTE.length],
   }));
   body.appendChild(buildList(rows, (r) => `${r.totalOz} oz`));
+
+  // Mirrors the top-drinks card: with pours logged, drill into the full
+  // ingredient leaderboard. The empty state above returns early.
+  card.classList.add("dash-card--shortcut", "tappable");
+  card.addEventListener("click", () => navigate("ingredientStats"));
 
   return card;
 }
@@ -421,7 +432,7 @@ export function adminDashboardView({ setMeta, onSwitchTab }) {
   const element = document.createElement("div");
   element.className = "admin-body admin-body--dashboard";
 
-  function renderStatusStrip(stats) {
+  function renderStatusStrip(stats, inventory) {
     const strip = document.createElement("section");
     strip.className = "dash-status";
 
@@ -437,6 +448,9 @@ export function adminDashboardView({ setMeta, onSwitchTab }) {
     strip.appendChild(statBlock("Total pours", String(stats.totalPours)));
     strip.appendChild(statBlock("Today", String(stats.todayPours)));
     strip.appendChild(statBlock("Last pour", relativeTime(stats.lastPourAt)));
+    // Only shown once at least one bottle has a recorded cost.
+    const value = barValue(inventory?.slots);
+    if (value > 0) strip.appendChild(statBlock("Bar value", `$${value}`));
 
     return strip;
   }
@@ -465,7 +479,7 @@ export function adminDashboardView({ setMeta, onSwitchTab }) {
 
   function render(stats, inventory) {
     element.innerHTML = "";
-    element.appendChild(renderStatusStrip(stats));
+    element.appendChild(renderStatusStrip(stats, inventory));
     element.appendChild(renderRow1(stats));
     element.appendChild(renderRow2(inventory));
 

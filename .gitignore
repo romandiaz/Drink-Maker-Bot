@@ -9,3 +9,6 @@ build/
 
 # Application state data
 src/server/state/
+
+# On-device backup files
+src/server/backups/

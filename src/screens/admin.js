@@ -1,11 +1,12 @@
-import { header, notificationsButton, readyIndicator } from "../components/header.js";
+import { header, homeButton, notificationsButton, historyButton, restartButton, readyIndicator } from "../components/header.js";
 import { adminDashboardView } from "./admin-dashboard.js";
 import { adminInventoryView } from "./admin-inventory.js";
+import { adminIngredientsView } from "./admin-ingredients.js";
 import { adminRecipesView } from "./admin-recipes.js";
 import { adminSubmissionsView } from "./admin-submissions.js";
 import { adminMaintenanceView } from "./admin-maintenance.js";
-import { adminHistoryView } from "./admin-history.js";
 import { adminNetworkView } from "./admin-network.js";
+import { goBack } from "../app.js";
 
 // Tab shell for the admin area. Holds a fixed header, a tab switcher, the
 // active view's body, and a shared footer. Views own their own data fetching
@@ -16,9 +17,9 @@ import { adminNetworkView } from "./admin-network.js";
 const TABS = [
   { id: "dashboard", label: "Dashboard", factory: adminDashboardView, hint: "Tap a card for details" },
   { id: "inventory", label: "Inventory", factory: adminInventoryView, hint: "Changes save automatically" },
+  { id: "ingredients", label: "Ingredients", factory: adminIngredientsView, hint: "Attributes persist whether or not an ingredient is loaded" },
   { id: "recipes", label: "Recipes", factory: adminRecipesView, hint: "Changes save automatically" },
   { id: "submissions", label: "Submissions", factory: adminSubmissionsView, hint: "Promote guest builds into the catalog" },
-  { id: "history", label: "History", factory: adminHistoryView, hint: "Newest pours first · capped at 500" },
   { id: "maintenance", label: "Maintenance", factory: adminMaintenanceView, hint: "Routines run on the live machine" },
   { id: "network", label: "Network", factory: adminNetworkView, hint: "Switch wlan0 between client and host mode" },
 ];
@@ -33,11 +34,20 @@ export function admin() {
   // moved out to keep the admin tab strip from running off the edge.
   const headerRight = document.createElement("div");
   headerRight.className = "header-right-cluster";
-  headerRight.append(notificationsButton(), readyIndicator());
+  headerRight.append(restartButton(), historyButton(), notificationsButton(), readyIndicator());
 
   element.appendChild(
     header({
       back: true,
+      onBack: () => {
+        if (tabHistory.length > 0) {
+          const prevId = tabHistory.pop();
+          switchTab(prevId, true);
+        } else {
+          goBack();
+        }
+      },
+      leftExtra: homeButton(),
       eyebrow: "Station 01",
       title: "Admin",
       right: headerRight,
@@ -67,9 +77,13 @@ export function admin() {
 
   let activeView = null;
   let activeTabId = null;
+  const tabHistory = [];
 
-  function switchTab(id) {
+  function switchTab(id, isBack = false) {
     if (activeTabId === id) return;
+    if (activeTabId && !isBack) {
+      tabHistory.push(activeTabId);
+    }
     activeView?.unmount?.();
     activeView = null;
     viewHost.innerHTML = "";

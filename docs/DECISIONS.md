@@ -335,3 +335,230 @@ Decisions made where the brief or screen spec left an ambiguity, per the
 - **Tab order: last.** History is the rarest tab to open (read-only,
   diagnostic). Sits after Maintenance; Dashboard / Inventory / Recipes
   remain the daily-use tabs at the front.
+
+## Persistent ingredient attributes
+
+- **ABV, bottle size, and cost are attributes of the ingredient, not the
+  slot.** They moved out of the inventory slot into a new persisted store,
+  `src/server/state/ingredients.json` (`server/ingredients-store.js`), keyed by
+  ingredient ID. A slot now records only what's physical to it —
+  `{ slot, ingredientId, remainingOz }`. The attributes survive an ingredient
+  being unloaded from every slot, so re-loading gin later restores its bottle
+  size and cost instead of resetting to defaults.
+- **ABV was promoted from a hardcoded map to editable data.** The old static
+  `INGREDIENT_ABV` table in `ingredients.js` moved to `ingredient-defaults.js`
+  where it now seeds the store and acts as the fallback for ingredients with no
+  record. `ingredientAbv()` is re-exported from `ingredient-store.js` so the
+  detail screen's estimate reflects admin edits.
+- **Upgrade is migrated automatically.** On first boot with no
+  `ingredients.json`, `ingredients-store.js` harvests each slot's legacy
+  `capacityOz` / `costPerBottle` from `inventory.json` into per-ingredient
+  records. `inventory.js` strips those legacy slot fields the first time it
+  loads the file; the store loads first at boot so the migration wins the race.
+- **Two editing surfaces.** The Inventory tab's level-column tap still opens the
+  attributes editor (now also carrying ABV) for the loaded ingredient; a new
+  **Ingredients** admin tab lists every known ingredient — loaded or not — so
+  attributes can be set before an ingredient is ever loaded. Both write through
+  `PUT /api/ingredients/:id`, which broadcasts `INGREDIENTS_UPDATED`.
+- **remainingOz is no longer clamped to capacity server-side.** Bottle size
+  lives on the ingredient now, so a payload can't be cross-checked against it in
+  `inventory.js`. Downsizing a bottle below its current fill just caps the
+  display (fill bar at 100%, bar-value fraction at 1) until the next refill.
+- **Ingredients tab is grouped, not a flat alphabetical list.** Three sections —
+  Spirits, Liqueurs & Aperitifs, Mixers & Juices — sorted by name within each.
+  Group assignment needs no name-parsing: base spirits come from the existing
+  `shotIngredients` list, anything else with ABV > 0 is a liqueur/aperitif, and
+  ABV 0 is a mixer. An admin-added ingredient lands in the right group the
+  moment its ABV is set.
+- **One add-ingredient flow, used everywhere.** `components/new-ingredient.js`
+  (`promptNewIngredient`) is the single path for introducing an ingredient —
+  the Ingredients tab's "+ Add ingredient" button and the ingredient picker's
+  "+ New" tile both call it. It collects a name, slugifies an ID, and `PUT`s an
+  empty patch so a default attribute record is persisted immediately. That
+  record is enough for `allIngredientIds()` to surface the ingredient (it now
+  also reads the attribute-store keys), so a freshly-added ingredient appears in
+  the catalog and picker even before it's used in any recipe or slot. Adding
+  from the Ingredients tab drops straight into the attribute editor; adding from
+  the picker stays low-friction and hands the ID back to the recipe/slot.
+- **Delete is offered for orphan ingredients only.** The Ingredients tab shows a
+  two-tap delete (`DELETE /api/ingredients/:id`) only on ingredients no recipe,
+  top-up, shot, or pump slot references — i.e. ones that exist purely as a
+  catalog record. An in-use ingredient can't be deleted: removing its record
+  wouldn't unlink it (the recipe still points at it) and it would just reappear
+  with default attributes, so the button is simply absent rather than disabled.
+
+## Drink queue — shared, server-side
+
+A queue lets guests stack drinks: tapping Pour while the machine is busy adds
+the drink to a shared queue instead of being blocked. The queue is used from
+the kiosk *and* from guests' phones on the AP, so it lives on the **server**.
+(An earlier per-tablet frontend version was scrapped — a second phone had no
+idea a queue existed, so its pour button stayed disabled while busy.)
+
+- **The queue is server-owned and broadcast.** `src/server/queue.js` holds the
+  waiting drinks; `index.js` orchestrates pours from it. The state is pushed
+  to every client as a `QUEUE_STATE` broadcast (and on connect), exactly like
+  `MACHINE_STATE`. The server is the single authority — which keeps
+  multi-device use race-free with no client-side coordination.
+- **The server orchestrates; clients never drive pours.** A client sends
+  `QUEUE_ADD` (and `QUEUE_CONTINUE` / `POUR_CANCEL`); the server decides what
+  pours and when. The old client-initiated `POUR` message and per-connection
+  cancel are gone. Pour events (`POUR_PROGRESS` etc.) are now *broadcast*
+  rather than unicast to the originating socket, so whichever device is on the
+  pouring screen — kiosk or phone — follows along.
+- **`QUEUE_ADD` routes itself.** If the machine is free the server pours the
+  drink immediately; otherwise it waits in line. The server replies to the
+  adding client with `QUEUE_ADDED { pouringNow, position }` so that client
+  knows whether to open the pouring screen or just show an "Added to the
+  queue — #N in line" toast. A guest who adds to a busy machine stays browsing
+  (the chosen UX) — they aren't pulled onto the pour screen.
+- **The pour button is reused, never disabled-for-busy.** On detail /
+  shot-detail / build-your-own the confirm-pour button reads **Pour** when the
+  machine is free and **Add to queue** when it isn't — the same button doing
+  the queue's job. The only disabled state left is **Queue full** (`MAX_QUEUE`
+  = 10, server-enforced) plus each screen's own recipe/stock blocks.
+- **`src/queue-store.js` is a thin queue client.** It just mirrors `QUEUE_STATE`
+  and sends `QUEUE_*` actions — no local queue, no pour orchestration. Screens
+  read `getQueue()` / `onQueueChange()`. (Renamed from `round.js`, whose name
+  didn't telegraph its job, to match the other `*-store.js` frontend caches.)
+- **One queue screen, not a separate swap-glass screen.** `src/screens/queue.js`
+  is the full list of stacked drinks *and* the between-pours pause. An earlier
+  build had a separate focused swap-glass prompt; it was merged because there
+  was no way to see the whole queue. The screen lists every waiting drink
+  (glass, name, ingredients), marks the next one, and — when the machine is
+  idle with drinks waiting — offers **Pour next**.
+- **The queue lives in the header's status pill — reachable from every
+  screen.** Rather than a separate header element, the queue folded into the
+  existing machine-status indicator (`readyIndicator`): it now reads
+  "Ready" / "Pouring" / "Maintenance" / "Paused" and appends "· N" when N
+  drinks are waiting, and it's a button that taps through to the queue screen.
+  So the queue is reachable from anywhere without hunting — which matters when
+  multiple terminals each order a drink and then navigate away (an earlier
+  idle-only banner, and then a separate count chip, both left gaps). One pill
+  instead of two elements; it pulses in an accent colour when the round is
+  parked for a Continue tap. The pill is on every screen except the queue
+  screen itself (which shows the same state in-body).
+- **Between pours: a manual Continue (chosen over auto-advance).** After each
+  pour the server parks (`awaitingContinue`) instead of auto-starting the
+  next; the pouring screen routes to the queue screen, where someone swaps the
+  glass and taps Pour next (`QUEUE_CONTINUE`, valid from any device). The
+  pouring / queue / complete screens are all passive views that route off
+  `MACHINE_STATE` + `QUEUE_STATE`.
+- **Adding to a busy machine lands on the queue screen.** That is the feedback
+  for a queued drink — the guest sees it drop into the list — and it doubles
+  as "see the full queue". (A toast was tried first and wasn't noticeable
+  enough.) Pouring immediately still goes straight to the pouring screen.
+- **The queue is manageable, not just viewable.** The queue screen removes any
+  waiting drink (`QUEUE_REMOVE`) and clears the whole queue (`QUEUE_CLEAR`).
+  This is also the **recovery path**: Pour next / Clear get a stuck or
+  abandoned round moving again without a server restart. No auto-clear timer —
+  it would silently drop a slow party's legit queue; an explicit Clear is
+  safer, and the queue screen is always one tap away (the header status pill).
+- **The pouring screen no longer owns the pour.** It renders the current pour
+  from the shared machine job (`job.order`), and the pour continues
+  server-side regardless of frontend navigation. So it now has a normal back
+  button, and leaving it (e.g. via "Add drink" → the menu) is safe — no
+  cancel-on-unmount.
+- **Cancel and errors skip, they don't wipe the queue.** `POUR_CANCEL` (from
+  any device) cancels the current pour; the server then parks for the next
+  drink. A failed pour behaves the same. At a party one bad drink shouldn't
+  nuke everyone else's, so the rest of the queue survives.
+- **`startQueuedPour` releases the lock in a `finally`.** A terminal pour
+  event always releases the machine even if broadcasting it throws — otherwise
+  one bad `client.send()` could strand the machine "pouring" forever. It also
+  guards against a driver that fires its terminal event synchronously (an
+  unknown drink) overwriting the cancel handle with a stale value.
+- **The queue is not cleared on inactivity.** It is shared across devices —
+  one tablet's 60s auto-return-to-idle must not wipe everyone's drinks. It
+  drains by pouring through it, or via Clear. (It is in-memory, so a server
+  restart clears it — acceptable; no persistence was requested.)
+- **Known limitation: a disconnected viewer can briefly lag.** If a client's
+  socket drops and it misses a `POUR_COMPLETE`, it catches up from the next
+  `MACHINE_STATE` / `QUEUE_STATE` on reconnect. The server never misses
+  anything (it owns the pour), so the queue stays globally correct.
+
+## On-device backups
+
+Backups were download-only. Now `GET /api/backup` also writes a copy onto the
+Pi, and the Maintenance tab browses, restores, and deletes those copies.
+
+- **Backups live in `src/server/backups/`, a sibling of `state/` — never
+  inside it.** `createBackup()` bundles every `state/*.json`; a backup file
+  dropped in `state/` would get recursively re-bundled into the next backup.
+  The folder is gitignored, like `state/`.
+- **Export does both — download and on-device save in one tap.** The export
+  endpoint streams the download (`Content-Disposition`) and writes the Pi copy
+  in the same request. The saved filename rides back in an `X-Backup-Saved`
+  response header so the client reports honestly whether the on-device copy
+  landed; a failed disk write (full/read-only SD card) is logged and the
+  download still proceeds rather than failing the whole export.
+- **Restore-by-name reads the bundle server-side** (`POST
+  /api/backups/:name/restore`) instead of round-tripping it through the
+  client. Filenames are validated with the same `SAFE_NAME` slug rule that
+  filters `state/`, which doubles as the path-traversal guard. The file-upload
+  restore (`POST /api/restore`) stays for restoring a bundle that isn't on the
+  Pi (e.g. one downloaded to a laptop).
+- **No auto-pruning — delete is manual.** The browse list gives each backup a
+  Delete action; the server never removes a backup on its own. Restore and
+  Delete both use a two-tap arm-to-confirm, since both are destructive.
+
+
+## Mobile order page: category filter
+
+The horizontal scroll of pill chips was replaced with a single-select dropdown.
+
+- **Single-select, `null` = "All".** `state.activeCategory` holds one category
+  id or `null` (no filter, show everything). The "All drinks" row sets it back
+  to `null`. (A multi-select version was tried and rejected — one category at a
+  time keeps the picker simple.)
+- **The dropdown closes on pick.** Single-select means one tap finishes the
+  choice, so selecting a row closes the menu. It also closes on a tap outside (a
+  transparent full-screen catcher) or a second tap of the trigger. `filterOpen`
+  lives in `state` so it survives the rerenders that picking — and background WS
+  updates — trigger.
+- **Cards animate only on a filter change.** A one-shot `filterChanged` flag,
+  consumed by `renderList()`, gates a staggered fade-and-rise. Background
+  rerenders (queue, machine status, pour progress) fire constantly; animating on
+  every one would make the list flicker, so they leave the flag false. The
+  per-card stagger is capped at 8 steps so a long list doesn't trail off.
+- **Flat per the design rules.** No drop shadow or blur — the panel reads as a
+  surface via its border + `--bg-surface` fill. A dark scrim dims the rest of
+  the page while the menu is open (matching the drink sheet's backdrop); a flat
+  semi-transparent overlay is consistent with "flat only" in CLAUDE.md.
+
+## Pre-pour glass wait has a timeout
+
+The real-hardware pour driver waits for a glass on the platform before
+dispensing (`serialPour.js`). That wait used to be unbounded.
+
+- **The glass wait caps at 120s, then fails with `POUR_ERROR { code: "NO_GLASS" }`.**
+  An unbounded wait holds the machine-state lock for as long as it runs, which
+  blocks the entire shared queue — and the pouring screen is exempt from the
+  60s inactivity auto-return, so a guest who taps Pour with no glass and walks
+  away would strand the machine until someone did the 2s hold-to-cancel. The cap
+  routes through the normal terminal-event path, so the lock releases and the
+  queue advances/parks on its own. 120s is generous enough that fetching a glass
+  never trips it, short enough that an abandoned pour self-recovers. Mock mode is
+  unaffected — it proceeds after a fixed 3s and never enters this loop.
+- **`pouring.js` carries matching copy** for the `NO_GLASS` code ("No glass
+  detected — place a glass on the tray and try again") so the failure reads
+  clearly instead of falling through to the generic "Pour failed" branch.
+
+## Server REST layer split into route modules
+
+`index.js` had grown to ~950 lines, two-thirds of which was one `handleApi`
+route table. This is structure only — no endpoint behavior or contract changed.
+
+- **Routes live in `src/server/routes/*`, one module per domain**, dispatched by
+  a slim `handleApi` loop in `index.js`. Each module exports a
+  `(req, res, urlPath, ctx) => bool` handler that claims the requests it
+  recognises. Shared `sendJson` / `readJsonBody` plus a `jsonRoute` helper (folds
+  the repeated try/catch-to-JSON shape) live in `src/server/http-util.js`;
+  `withMachineLock` (acquire → 409-if-busy → release) lives in the maintenance
+  route module, its only consumer. `ctx` carries `broadcast` so routes don't
+  import `index.js` (no cycle).
+- **GET routes now return a JSON 400 on error** instead of an unhandled
+  rejection — a strict improvement that fell out of wrapping every handler in
+  `jsonRoute`. The admin Maintenance view was split the same way
+  (`components/maint-ui.js`, `calibrate-modal.js`, `scale-modals.js`,
+  `screens/admin-backup.js`).

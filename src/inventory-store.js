@@ -1,7 +1,11 @@
 // Client-side cache of which ingredients are physically loaded and have
-// volume left. Populated at boot from /api/inventory; refreshed after admin
-// edits and after POUR_COMPLETE. Screens read via the helpers below instead
-// of re-fetching — keeps the inventory check cheap on every render.
+// volume left. Populated at boot from /api/inventory; the server broadcasts
+// INVENTORY_UPDATED on every mutation (admin edit, pour consume, maintenance
+// run) and the listener below refreshes the cache so screens that read from
+// these helpers always see fresh data on their next render.
+
+import { on as onWS } from "./ws.js";
+import { bottleSizeOz, costPerBottle } from "./ingredient-store.js";
 
 // Bottle is "low" once it dips to this fraction of capacity (15%). Single
 // constant so the inventory tab's yellow fill-bar and the dashboard card's
@@ -10,14 +14,32 @@ export const LOW_BOTTLE_THRESHOLD = 0.15;
 
 // Classify one slot for UX grouping (donut segments, list rows, fill-bar
 // color). Empty is kept distinct from low — an empty bottle needs a refill,
-// not the same yellow "running low" treatment as a partially-full one.
+// not the same yellow "running low" treatment as a partially-full one. Bottle
+// size comes from the ingredient's persistent record, not the slot.
 export function bottleStatus(slot) {
   if (!slot?.ingredientId) return "unloaded";
   const remaining = Number(slot.remainingOz) || 0;
   if (remaining <= 0) return "empty";
-  const capacity = Number(slot.capacityOz) || 0;
+  const capacity = bottleSizeOz(slot.ingredientId);
   if (capacity <= 0) return "empty";
   return remaining / capacity <= LOW_BOTTLE_THRESHOLD ? "low" : "healthy";
+}
+
+// Worth of the liquid currently in the machine: each loaded bottle's cost
+// scaled by the fraction still in it. Bottle size and cost come from the
+// ingredient's persistent record. Ingredients with no cost recorded contribute
+// nothing. The fill fraction is capped at 1 in case a bottle was downsized
+// below its current volume. Rounded to whole dollars.
+export function barValue(slots) {
+  let total = 0;
+  for (const s of slots || []) {
+    if (!s.ingredientId) continue;
+    const cap = bottleSizeOz(s.ingredientId);
+    const cost = costPerBottle(s.ingredientId);
+    if (cap <= 0 || cost <= 0) continue;
+    total += Math.min(1, (Number(s.remainingOz) || 0) / cap) * cost;
+  }
+  return Math.round(total);
 }
 
 const state = {
@@ -153,3 +175,7 @@ export function slotCount() {
 export function slotForIngredient(ingredientId) {
   return state.slotByIngredient.get(ingredientId);
 }
+
+// Refresh whenever the server says inventory changed (any tablet's edit,
+// pour completion, maintenance run). Errors are swallowed inside loadInventory.
+onWS("INVENTORY_UPDATED", () => { loadInventory(); });

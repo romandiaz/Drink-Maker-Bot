@@ -1,5 +1,5 @@
 // Append-only log of toasts shown anywhere in the UI. Captures errors
-// (pour failures, save errors) plus info-variant status messages
+// (pour failures, save errors) plus success/info status messages
 // ("History cleared") so the admin Notifications tab can replay what a
 // guest saw and dismissed before the kiosk owner could read it.
 //
@@ -43,12 +43,20 @@ async function persist() {
   await writeFile(NOTIFICATIONS_PATH, JSON.stringify(cache, null, 2), "utf8");
 }
 
+// Re-read from disk after a backup restore.
+export async function reloadFromDisk() {
+  cache = null;
+  await load();
+}
+
 export async function record({ message, variant }) {
   if (!message) return;
   const data = await load();
   data.entries.push({
     message: String(message),
-    variant: variant === "info" ? "info" : "error",
+    // Anything not explicitly success/info is treated as an error so a
+    // caller that forgets the variant fails loud rather than silent.
+    variant: variant === "info" || variant === "success" ? variant : "error",
     ts: new Date().toISOString(),
   });
   if (data.entries.length > MAX_ENTRIES) {

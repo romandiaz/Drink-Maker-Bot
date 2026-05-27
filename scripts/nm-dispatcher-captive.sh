@@ -31,6 +31,14 @@ case "$ACTION" in
     iptables -F "$CHAIN"
     iptables -A "$CHAIN" -j DROP
 
+    # Delete-before-add so a repeated `up` (no intervening `down`) doesn't
+    # stack duplicate rules. The chain DROP above is already idempotent via
+    # the flush; PREROUTING/FORWARD are not, so clear them first.
+    iptables -t nat -D PREROUTING -i "$INTERFACE" -p tcp --dport 80 \
+      -j REDIRECT --to-port "$KIOSK_PORT" 2>/dev/null || true
+    iptables -D FORWARD -i "$INTERFACE" -j "$CHAIN" 2>/dev/null || true
+    iptables -D FORWARD -o "$INTERFACE" -j "$CHAIN" 2>/dev/null || true
+
     # Funnel HTTP from AP clients to the kiosk.
     iptables -t nat -A PREROUTING -i "$INTERFACE" -p tcp --dport 80 \
       -j REDIRECT --to-port "$KIOSK_PORT"

@@ -12,6 +12,16 @@
 //   <- READY                            (boot, no ID)
 //   -> READ                  #<id>  ->  WEIGHT <grams> #<id>
 //   -> TARE                  #<id>  ->  OK TARE #<id>
+//   -> STABLE [<n>] [<tol>]  #<id>  ->  OK STABLE <grams> #<id>
+//                                    or  ERR scale-unstable #<id>
+//                                    or  ERR scale-timeout #<id>
+//
+//      Debounced read: returns the mean once the last <n> HX711 samples
+//      (default 3, max STABLE_SAMPLES_MAX) all fall within <tol> grams
+//      (default STABLE_TOLERANCE_DEFAULT_G). Use this instead of READ
+//      when one noisy sample would mis-fire a threshold (glass-present
+//      detection, glass-lift detection). Hard 3s internal cap so a user
+//      resting a hand on the platform fails fast.
 //   -> CAL  <known_grams>    #<id>  ->  OK CAL <factor> #<id>
 //   -> RUN  <slot> <ms>      #<id>  ->  DONE #<id>
 //   -> POUR <slot> <grams> [<max-sec>] #<id>
@@ -21,6 +31,7 @@
 //                                    or  ERR no-flow <actual> #<id>       (weight stalled; bottle empty / clog)
 //                                    or  ERR scale-timeout <actual> #<id> (HX711 stopped responding)
 //                                    or  ERR pour-timeout <actual> #<id>  (host-supplied max-sec elapsed)
+//                                    or  ERR glass-removed <actual> #<id> (glass lifted mid-pour)
 //
 //      <max-sec> is optional. Host computes it from the slot's calibrated
 //      flow rate × a slop factor, so the cap scales with the requested
@@ -28,12 +39,15 @@
 //      POUR_TIMEOUT_MS_DEFAULT below — used by the diag sketch and the
 //      manual serial console where no calibration is available.
 //   -> PING                  #<id>  ->  PONG #<id>
-//   -> STOP                          ->  OK STOP                (no-ID, fire-and-forget)
-//                                        ERR aborted #<pour-id> (only if a POUR was in flight)
+//   -> STOP                          ->  OK STOP                  (no-ID, fire-and-forget)
+//                                        ERR aborted #<inflight>  (if a POUR or STABLE was in flight)
 //   bad input                       ->  ERR <reason> [#<id>]
 //
 // Slots are 1-based to match inventory.json on the Pi side.
-// CAL persists to EEPROM and survives reboots; tare does not (re-tare per session).
+// CAL persists to EEPROM and survives reboots; tare does not (re-tare per
+// session). POUR does NOT tare internally — it samples a baseline at
+// pour-start and measures delta from there, leaving the HX711 zero
+// undisturbed for other consumers (host glass-watcher, admin maintenance).
 //
 // Hardware watchdog: a 4s WDT is armed in setup() and kicked from loop() and
 // the inner pour/run/cal busy-loops. If the firmware hangs (HX711 wedge,
@@ -98,10 +112,32 @@ const uint32_t PROGRESS_INTERVAL_MS = 250;
 const uint32_t NO_FLOW_WINDOW_MS = 5000;
 const float    NO_FLOW_PROGRESS_G = 1.0f;
 
+// Glass-removed guard: a strongly negative *delta from pour-start* means
+// the glass that was on the platform when POUR began is no longer there.
+// Without this check the pour would run for the full NO_FLOW_WINDOW (5s)
+// spraying liquid onto the platform — relying on no-flow to catch it is
+// far too slow. N consecutive samples are required so a single ADC blip
+// can't false-abort a healthy pour.
+const float    GLASS_REMOVED_THRESHOLD_G = -50.0f;
+const uint8_t  GLASS_REMOVED_SAMPLES     = 3;
+
 // HX711 read guard: if the load cell stops responding (loose DOUT line,
 // ADC stuck) get_units() would block until the WDT fires. Cap each read
 // at 500ms so we can fail with a clean ERR scale-timeout instead.
 const uint32_t SCALE_READ_TIMEOUT_MS = 500;
+
+// STABLE primitive: returns the mean of N HX711 samples once they all
+// agree within `tolerance` grams. Defaults are tuned for "glass placement"
+// type events — settle within a few hundred ms once the user stops moving.
+// MAX is the rolling-buffer ceiling; the host can request fewer samples
+// for a faster (but less debounced) reading.
+const uint8_t  STABLE_SAMPLES_DEFAULT     = 3;
+const uint8_t  STABLE_SAMPLES_MAX         = 10;
+const float    STABLE_TOLERANCE_DEFAULT_G = 0.5f;
+// Hard internal cap. A user resting a hand on the platform never settles,
+// so we bail with ERR scale-unstable and let the host loop and try again.
+// Must stay well under the 4s WDT window.
+const uint32_t STABLE_TIMEOUT_MS          = 3000;
 
 HX711 scale;
 
@@ -109,9 +145,10 @@ HX711 scale;
 // Every println goes through printIdSuffix() so the same ID is echoed in the
 // matching response.
 String currentId = "";
-// Captured at POUR start so peekStop() can fail the right queued command on
-// the host when STOP arrives mid-pour.
-String inflightPourId = "";
+// Captured at the start of any command that calls peekStop() (POUR, STABLE)
+// so STOP can fail the right queued command on the host instead of leaving
+// it hanging on a reply that never comes.
+String inflightId = "";
 
 // Strip a trailing "#<n>" token from `line` and return it (e.g. "#42").
 // Returns "" when no ID token is present, leaving `line` unchanged.
@@ -235,6 +272,12 @@ void handleCommand(String line) {
     printIdSuffix();
     return;
   }
+  // Bare STABLE (no args) → defaults. The args-bearing form is handled
+  // alongside CAL below since it doesn't take a slot.
+  if (line.equalsIgnoreCase("STABLE")) {
+    stableRead(STABLE_SAMPLES_DEFAULT, STABLE_TOLERANCE_DEFAULT_G);
+    return;
+  }
 
   int sp1 = line.indexOf(' ');
   if (sp1 < 0) { Serial.print("ERR bad-format"); printIdSuffix(); return; }
@@ -245,6 +288,21 @@ void handleCommand(String line) {
   if (op.equalsIgnoreCase("CAL")) {
     float knownG = rest.toFloat();
     calibrateScale(knownG);
+    return;
+  }
+  if (op.equalsIgnoreCase("STABLE")) {
+    // "STABLE <n> [<tolerance>]". toFloat() stops at the first non-numeric
+    // char so reading <n> as int via toInt() then peeling off the tolerance
+    // works whether one or two args follow.
+    int nReq = rest.toInt();
+    uint8_t n = (nReq <= 0) ? STABLE_SAMPLES_DEFAULT : (uint8_t)nReq;
+    float tol = STABLE_TOLERANCE_DEFAULT_G;
+    int sp = rest.indexOf(' ');
+    if (sp >= 0) {
+      float t = rest.substring(sp + 1).toFloat();
+      if (t > 0) tol = t;
+    }
+    stableRead(n, tol);
     return;
   }
 
@@ -310,15 +368,88 @@ void runTimed(uint8_t slot, uint32_t ms) {
   printIdSuffix();
 }
 
+// Debounced weight read. Samples the HX711 in a rolling buffer of <nSamples>
+// and returns the mean once the spread (max - min) across the buffer is
+// within <tolerance> grams. Used by host-side glass detection: one STABLE
+// gives a high-quality reading without the host having to debounce noisy
+// single-sample READs across a long round-trip. Capped at STABLE_TIMEOUT_MS
+// so a user resting a hand on the platform fails fast with ERR scale-unstable
+// and the host can loop, rather than us starving the WDT.
+void stableRead(uint8_t nSamples, float tolerance) {
+  // Stash the ID so peekStop() emits "ERR aborted #<id>" against the right
+  // queued command if STOP arrives mid-sample.
+  inflightId = currentId;
+
+  if (nSamples < 2) nSamples = 2;
+  if (nSamples > STABLE_SAMPLES_MAX) nSamples = STABLE_SAMPLES_MAX;
+  if (!(tolerance > 0)) tolerance = STABLE_TOLERANCE_DEFAULT_G;
+
+  float buf[STABLE_SAMPLES_MAX];
+  uint8_t filled = 0;
+  uint8_t head = 0;
+  uint32_t start = millis();
+
+  while (millis() - start < STABLE_TIMEOUT_MS) {
+    wdt_reset();
+    if (peekStop()) { inflightId = ""; return; }
+    if (!scale.wait_ready_timeout(SCALE_READ_TIMEOUT_MS)) {
+      Serial.print("ERR scale-timeout");
+      printIdSuffix();
+      inflightId = "";
+      return;
+    }
+    float g = scale.get_units(1);
+    buf[head] = g;
+    head = (head + 1) % nSamples;
+    if (filled < nSamples) filled++;
+
+    if (filled >= nSamples) {
+      float lo = buf[0], hi = buf[0], sum = buf[0];
+      for (uint8_t i = 1; i < nSamples; i++) {
+        if (buf[i] < lo) lo = buf[i];
+        if (buf[i] > hi) hi = buf[i];
+        sum += buf[i];
+      }
+      if (hi - lo <= tolerance) {
+        Serial.print("OK STABLE ");
+        Serial.print(sum / nSamples, 2);
+        printIdSuffix();
+        inflightId = "";
+        return;
+      }
+    }
+  }
+  Serial.print("ERR scale-unstable");
+  printIdSuffix();
+  inflightId = "";
+}
+
 void pourClosedLoop(uint8_t slot, float targetG, uint32_t timeoutMs) {
   // Stash the ID so peekStop() can reference it if STOP arrives mid-pour;
   // the host needs to know which queued POUR to fail.
-  inflightPourId = currentId;
+  inflightId = currentId;
 
-  // Best-effort tare: if the HX711 is dead we'll catch it in the loop
-  // below and bail with ERR scale-timeout rather than blocking here.
+  // Capture a baseline weight reading once at pour start, then measure
+  // delta from that baseline for the entire pour. We deliberately do NOT
+  // call scale.tare() here — the HX711's tare offset is a shared resource
+  // (the host-side glass watcher reads absolute grams to decide what
+  // "empty platform" looks like), and re-zeroing it on every pour leads
+  // to a desync where the watcher can get stuck believing no glass is
+  // present after a pour ends. Tracking a per-pour delta in software
+  // gives us the same closed-loop behavior with no global side-effect.
+  //
+  // Average 10 samples so a single noisy reading doesn't bias the
+  // baseline by enough to either overshoot the target or false-trip the
+  // glass-removed guard. If the HX711 is dead we bail immediately rather
+  // than running the pump blind.
+  float wStart = 0.0f;
   if (scale.wait_ready_timeout(SCALE_READ_TIMEOUT_MS)) {
-    scale.tare();
+    wStart = scale.get_units(10);
+  } else {
+    Serial.print("ERR scale-timeout 0.00");
+    printIdSuffix();
+    inflightId = "";
+    return;
   }
   delay(50);
 
@@ -328,12 +459,14 @@ void pourClosedLoop(uint8_t slot, float targetG, uint32_t timeoutMs) {
   uint32_t lastFlowTimeMs = millis();
   float poured = 0;
   float lastFlowG = 0;
+  uint8_t glassRemovedConsecutive = 0;
   bool timedOut = false;
   bool noFlow = false;
   bool scaleTimeout = false;
+  bool glassRemoved = false;
   while (poured < (targetG - POUR_OVERSHOOT_GUARD_G)) {
     if (millis() - start > timeoutMs) { timedOut = true; break; }
-    if (peekStop()) { inflightPourId = ""; return; }
+    if (peekStop()) { inflightId = ""; return; }
     wdt_reset();
     if (!scale.wait_ready_timeout(SCALE_READ_TIMEOUT_MS)) {
       // Pump is on but we can't measure — stop immediately rather than
@@ -341,7 +474,23 @@ void pourClosedLoop(uint8_t slot, float targetG, uint32_t timeoutMs) {
       scaleTimeout = true;
       break;
     }
-    poured = scale.get_units(1);
+    // Delta from the pour-start baseline. Stays positive while liquid
+    // accumulates in the glass; goes strongly negative only if the glass
+    // is physically removed from the platform.
+    poured = scale.get_units(1) - wStart;
+    // Glass-removed check. Mid-pour readings stay ≥0 (modulo noise) while
+    // the glass is still there; a strongly negative delta means the
+    // glass has been lifted. Require N consecutive samples below the
+    // threshold so a single ADC blip can't false-abort a healthy pour.
+    if (poured < GLASS_REMOVED_THRESHOLD_G) {
+      glassRemovedConsecutive++;
+      if (glassRemovedConsecutive >= GLASS_REMOVED_SAMPLES) {
+        glassRemoved = true;
+        break;
+      }
+    } else {
+      glassRemovedConsecutive = 0;
+    }
     uint32_t now = millis();
     if (poured > lastFlowG + NO_FLOW_PROGRESS_G) {
       lastFlowG = poured;
@@ -361,15 +510,21 @@ void pourClosedLoop(uint8_t slot, float targetG, uint32_t timeoutMs) {
 
   delay(150);
   // Settling read: capture liquid still in the air column after pump-off.
-  // If the scale doesn't respond, fall back to the last mid-pour value —
-  // the pump is already off, so we just lose the air-column correction.
+  // Same delta-from-baseline math as inside the loop. If the scale doesn't
+  // respond, fall back to the last mid-pour value — the pump is already
+  // off, so we just lose the air-column correction.
   float actual = poured;
   if (scale.wait_ready_timeout(SCALE_READ_TIMEOUT_MS)) {
-    actual = scale.get_units(5);
+    actual = scale.get_units(5) - wStart;
   }
 
   if (scaleTimeout) {
     Serial.print("ERR scale-timeout ");
+  } else if (glassRemoved) {
+    // Glass lifted mid-pour. Distinct from no-flow so the host can show
+    // "Glass was removed — please replace and try again" instead of the
+    // misleading "out of <ingredient>".
+    Serial.print("ERR glass-removed ");
   } else if (noFlow) {
     // Out of liquid, kinked tube, or pump that no longer moves fluid.
     // Distinct from pour-timeout so the host can show "out of <ingredient>"
@@ -382,17 +537,17 @@ void pourClosedLoop(uint8_t slot, float targetG, uint32_t timeoutMs) {
   }
   Serial.print(actual, 2);
   printIdSuffix();
-  inflightPourId = "";
+  inflightId = "";
 }
 
-// Mid-pour serial check. Only honors STOP — anything else is dropped on the
-// floor for now since the host shouldn't be sending other commands during a
-// pour. Returns true if the pour should abort.
+// Mid-operation serial check. Only honors STOP — anything else is dropped on
+// the floor since the host shouldn't be sending other commands while a POUR
+// or STABLE is in flight. Returns true if the current operation should abort.
 //
 // On abort we emit two lines: "OK STOP" (echoes the STOP's own ID, if any)
-// for the side-channel ack, then "ERR aborted #<inflight-pour-id>" so the
-// host can match the failure to the queued POUR command and fail it cleanly
-// instead of waiting for a DONE that will never come.
+// for the side-channel ack, then "ERR aborted #<inflight-id>" so the host
+// can match the failure to the queued command (POUR or STABLE) and fail it
+// cleanly instead of waiting for a reply that will never come.
 bool peekStop() {
   static String mid;
   while (Serial.available()) {
@@ -409,12 +564,12 @@ bool peekStop() {
         if (stopId.length()) { Serial.print(' '); Serial.print(stopId); }
         Serial.println();
         Serial.print("ERR aborted");
-        if (inflightPourId.length()) { Serial.print(' '); Serial.print(inflightPourId); }
+        if (inflightId.length()) { Serial.print(' '); Serial.print(inflightId); }
         Serial.println();
         return true;
       }
-      // Other commands during a pour are silently dropped — host shouldn't
-      // be sending them, and we don't want to perturb the closed loop.
+      // Other commands during a pour/stable are silently dropped — host
+      // shouldn't be sending them, and we don't want to perturb the loop.
     } else {
       mid += c;
       // Bumped from 16: must fit "STOP #<id>" without overflowing.

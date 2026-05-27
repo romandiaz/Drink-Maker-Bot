@@ -1,6 +1,5 @@
 import { allIngredientIds, ingredientName } from "../ingredients.js";
-import { textInputModal } from "./text-input-modal.js";
-import { slugify } from "../slug.js";
+import { promptNewIngredient } from "./new-ingredient.js";
 
 // Full-screen overlay that picks one ingredient ID. Tap outside the panel, or
 // select an option, to dismiss. `current` is the currently-assigned ID and
@@ -47,19 +46,9 @@ export function ingredientPicker({
   grid.className = "admin-picker__grid";
 
   function openNewIngredient() {
-    const modal = textInputModal({
-      label: "New ingredient name",
-      value: "",
-      maxLength: 40,
-      onDone: (v) => {
-        modal.remove();
-        if (!v) return;
-        const id = slugify(v);
-        if (!id) return;
-        onPick(id);
-      },
-    });
-    overlay.appendChild(modal);
+    // Same add flow as the Ingredients tab — mounts over the picker so the
+    // freshly-created ingredient drops straight into the slot/recipe.
+    promptNewIngredient({ host: overlay, onCreated: (id) => onPick(id) });
   }
 
   if (allowNew) {

@@ -96,6 +96,8 @@ export function search() {
   const kb = keyboard({
     onLetter: (l) => setQuery(query + l),
     onBackspace: () => setQuery(query.slice(0, -1)),
+    onPaste: (text) => setQuery(query + text),
+    getValue: () => query,
   });
 
   element.append(headerSlot, resultsEl, kb);

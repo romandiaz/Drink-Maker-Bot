@@ -1,0 +1,1257 @@
+/* Mobile order page. Uses the same design tokens as the kiosk (see CLAUDE.md)
+   but a fresh layout — the kiosk is 800x480 landscape, this is portrait phone
+   width. Sized so a single drink card is a comfortable tap target on a 360px
+   phone with the status banner pinned at top. */
+
+:root {
+  --bg-primary: #0a0a0a;
+  --bg-surface: #141414;
+  --bg-surface-2: #1a1a1a;
+  --bg-surface-dim: #0f0f0f;
+
+  --text-primary: #f5f5f5;
+  --text-secondary: #888;
+  --text-tertiary: #666;
+  --text-quaternary: #555;
+  --text-disabled: #444;
+
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-emphasis: rgba(255, 255, 255, 0.15);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --border-divider: rgba(255, 255, 255, 0.1);
+
+  --status-ready: #4ade80;
+  --status-busy: #f0c040;
+  --status-error: #f87171;
+
+  /* Referenced by the shared toast's error-variant stripe (toast.css).
+     Matches the kiosk's --accent-shots so an error toast looks the same
+     on both surfaces if mobile ever surfaces one. */
+  --accent-shots: #c45060;
+
+  --accent-classics: #d4a574;
+  --accent-refreshers: #5dcaa5;
+  --accent-sours: #f0c040;
+  --accent-party: #e85d9b;
+  --accent-tiki: #f59e0b;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+
+body {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+}
+
+button {
+  font-family: inherit;
+  background: none;
+  border: none;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* --- Header / status banner --------------------------------------------- */
+
+/* Wraps the status banner (.order-status) and category nav (.order-filter) in
+   rerender() (order.js) but carries no box of its own (display:contents) so the
+   two can sit on different stacking layers against the page backdrops: the
+   banner rides above them, the nav dims behind. Each is stickied individually;
+   order.js keeps the nav's sticky offset equal to the banner's (variable)
+   height so they stay glued together while the list scrolls. */
+.order-header {
+  display: contents;
+}
+
+.order-status {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+  padding: calc(var(--safe-top) + 12px) 16px 12px;
+  /* Pinned to the top and lifted above every backdrop — the tray's (18) and the
+     sheet's (20) — so the machine status stays visible while the page dims.
+     Below toasts (29/30). */
+  position: sticky;
+  top: 0;
+  z-index: 22;
+}
+
+.order-status__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.order-status__title {
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* --- Shared status pill (copied from kiosk styles.css so the mobile page
+   doesn't need to load the full kiosk stylesheet). Both surfaces render the
+   pill via components/status-pill.js, so keeping these in sync with
+   styles.css is a one-time copy — the component owns all the behavior. */
+
+.tappable {
+  transition: transform 150ms ease-out, opacity 150ms ease-out;
+}
+.tappable:active { transform: scale(0.97); opacity: 0.85; }
+
+.ready-indicator {
+  appearance: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+}
+
+.ready-indicator::before {
+  /* Invisible touch-target expander so the small pill is still 44px-comfy. */
+  content: "";
+  position: absolute;
+  inset: -12px -8px;
+}
+
+.ready-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ready-indicator .glass-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--status-ready);
+  transition: color 200ms ease-out;
+  display: block;
+}
+
+.ready-indicator .glass-icon__center {
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.ready-indicator--glass .glass-icon__center { opacity: 1; }
+
+.ready-indicator--busy .glass-icon {
+  color: var(--accent-sours);
+  animation: ready-pulse 1.2s ease-in-out infinite;
+}
+
+/* Pouring: the pie wedge IS the progress signal, so suppress the pulse and
+   the center dot. The wedge data updates from machine-state broadcasts in
+   lockstep on every connected device. */
+.ready-indicator--pouring .glass-icon { animation: none; }
+.ready-indicator--pouring .glass-icon__center { opacity: 0; }
+
+.glass-icon__pie { transition: d 200ms linear; }
+
+/* Parked — a poured drink waits for a Continue tap. Pink accent + pulse so
+   it reads as "needs attention" wherever the guest is in the UI. */
+.ready-indicator--parked .glass-icon {
+  color: var(--accent-party);
+  animation: ready-pulse 1.2s ease-in-out infinite;
+}
+.ready-indicator--parked .ready-label { color: var(--accent-party); }
+
+@keyframes ready-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Pour progress — mirrors the kiosk's pouring-bar visually but compact. The
+   bar fill uses transform: scaleX so it animates cheaply; the indeterminate
+   "waiting-for-glass" mode shows a slow pulse instead of a fixed pct. */
+.order-status__progress {
+  margin-top: 12px;
+}
+
+.order-status__step-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  text-transform: capitalize;
+}
+
+.order-status__step {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.order-status__pct {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.order-status__bar {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface-2);
+  overflow: hidden;
+}
+
+.order-status__bar-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--status-ready);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 280ms ease-out;
+}
+
+.order-status__bar.is-indeterminate .order-status__bar-fill {
+  transform: scaleX(0.4);
+  animation: order-status-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes order-status-pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.85; }
+}
+
+/* Completion — the guest's own drink just finished. The mobile equivalent of
+   the kiosk's complete screen, folded into the queue tray (see .order-tray) so
+   the two don't fight for the bottom edge: the tray gets a green top border and
+   swaps its peek/list for this content. Driven by order-tray.js, which toggles
+   .is-complete. Dismissed on Got it / glass-lift / timeout, after which the
+   normal queue returns. The styles below are the inner block; positioning,
+   border, and slide come from .order-tray. */
+.order-tray.is-complete {
+  border-top: 2px solid var(--status-ready);
+  /* Roomy cap so a long finish hint isn't clipped by the peek's max-height
+     (the rendered height still follows the content). */
+  max-height: 60vh;
+}
+
+/* Hide the queue peek + list while completion is showing; reveal the
+   completion block (otherwise display:none). */
+.order-tray.is-complete .order-tray__peek,
+.order-tray.is-complete .order-tray__list {
+  display: none;
+}
+.order-tray__completion { display: none; }
+.order-tray.is-complete .order-tray__completion {
+  display: block;
+  padding: 4px 0 8px;
+}
+
+.order-tray__complete-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.order-tray__complete-check {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  color: var(--status-ready);
+  flex-shrink: 0;
+}
+
+.order-tray__complete-check svg { width: 100%; height: 100%; }
+
+.order-tray__complete-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.order-tray__complete-finish {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.order-tray__complete-dismiss {
+  margin-top: 14px;
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  min-height: 44px;
+}
+
+.order-tray__complete-dismiss:active { opacity: 0.85; }
+
+/* --- Category filter (multi-select dropdown) ---------------------------- */
+
+/* Anchors the absolutely-positioned panel and pins just under the status banner
+   (order.js sets `top` to the banner's live height). z-index sits below the
+   backdrops (tray 18 / sheet 20) so the nav dims behind them — unlike the banner
+   above it. Sticky here is also the positioning context for the dropdown panel. */
+.order-filter {
+  position: sticky;
+  top: 56px; /* overwritten by order.js with the banner's measured height */
+  z-index: 5;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-surface-dim);
+}
+
+.order-filter__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  min-height: 44px;
+  /* Lifted above the scrim so the trigger stays bright next to the open panel
+     (the rest of the page dims behind it). */
+  position: relative;
+  z-index: 2;
+}
+
+/* A live filter (one or more categories) inverts the trigger so the guest can
+   see at a glance the list is narrowed — same active treatment the chips used. */
+.order-filter__trigger.is-active {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+}
+
+.order-filter__trigger:active { opacity: 0.85; }
+
+/* Badge + label group on the left of the trigger; the chevron stays on the
+   right via the trigger's space-between. */
+.order-filter__trigger-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.order-filter__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Available-drink count pill, shared by the trigger and the dropdown rows. The
+   translucent fill reads against both panel surfaces (--bg-surface and the
+   selected row's --bg-surface-2) and the trigger's default dark fill. */
+.order-filter__badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--border-divider);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* On the inverted (active) trigger the translucent pill would wash out against
+   the light button, so flip it to a dark fill with light text. */
+.order-filter__trigger.is-active .order-filter__badge {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.order-filter__chev {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1;
+  transition: transform 200ms ease-out;
+}
+
+.order-filter.is-open .order-filter__chev {
+  transform: rotate(180deg);
+}
+
+/* Full-screen scrim that dims the page while the menu is open and catches a
+   tap-off to dismiss it — same treatment as the drink sheet's backdrop. Fades
+   in on appear; it's rebuilt each rerender, so (like the panel) it has no
+   fade-out — closing removes it at once. */
+.order-filter__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: rgba(0, 0, 0, 0.6);
+  animation: order-filter-fade 180ms ease-out;
+}
+
+@keyframes order-filter-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.order-filter__panel {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: calc(100% - 4px);
+  z-index: 2;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-emphasis);
+  border-radius: var(--radius-lg);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transform-origin: top center;
+  animation: order-filter-open 180ms ease-out;
+}
+
+@keyframes order-filter-open {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Separates the "All drinks" row from the individual categories. The 4px
+   margins open it up past the panel's 2px row gap so it reads as a section
+   break, not just another gap. */
+.order-filter__divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-divider);
+}
+
+.order-filter__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  min-height: 48px;
+}
+
+.order-filter__option:active { background: var(--bg-surface-2); }
+
+.order-filter__option.is-selected {
+  color: var(--text-primary);
+  background: var(--bg-surface-2);
+}
+
+/* Count badge + category name sit together on the left; the check stays pinned
+   to the right edge via the row's space-between. */
+.order-filter__option-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.order-filter__check {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--status-ready);
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.order-filter__option.is-selected .order-filter__check { opacity: 1; }
+
+.order-filter__check svg { width: 100%; height: 100%; display: block; }
+
+/* --- Drink list --------------------------------------------------------- */
+
+.order-list {
+  /* Bottom padding reserves room for the sticky-bottom queue tray's peek
+     state so the last drink card isn't hidden behind it. The tray's
+     expanded state covers the list intentionally — the page content stays
+     scrolled where the guest left it underneath. */
+  padding: 12px 16px calc(var(--tray-peek-h) + 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.order-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  text-align: left;
+  width: 100%;
+  min-height: 84px;
+}
+
+.order-card:active { background: var(--bg-surface-2); }
+
+/* Staggered fade-and-rise when the list re-filters. Added by renderList() only
+   on a filter change (not on background queue/machine rerenders), so the list
+   animates in response to the guest's pick and stays still otherwise. The
+   per-card delay is driven by --stagger (capped in JS). */
+.order-card.is-entering {
+  animation: order-card-enter 260ms ease-out both;
+  animation-delay: calc(var(--stagger, 0) * 35ms);
+}
+
+@keyframes order-card-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .order-filter__panel { animation: none; }
+  .order-filter__backdrop { animation: none; }
+  .order-card.is-entering { animation: none; }
+}
+
+.order-card[disabled] {
+  opacity: 0.45;
+}
+
+.order-card__thumb {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-2);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.order-card__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.order-card__thumb--fallback {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.order-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.order-card__name {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 4px;
+  color: var(--text-primary);
+}
+
+.order-card__line {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+.order-card__category {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+}
+
+.order-card__category[data-cat="classics"] { color: var(--accent-classics); }
+.order-card__category[data-cat="refreshers"] { color: var(--accent-refreshers); }
+.order-card__category[data-cat="sours"] { color: var(--accent-sours); }
+.order-card__category[data-cat="party"] { color: var(--accent-party); }
+.order-card__category[data-cat="tiki"] { color: var(--accent-tiki); }
+
+.order-card__missing {
+  font-size: 11px;
+  color: var(--status-error);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.order-empty {
+  padding: 60px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* --- Bottom sheet (drink detail) ---------------------------------------- */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease-out;
+}
+
+.sheet-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 21;
+  background: var(--bg-surface);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  border-top: 1px solid var(--border-default);
+  padding: 16px 20px calc(env(safe-area-inset-bottom, 0px) + 20px);
+  transform: translateY(100%);
+  /* Plain ease-out for the slide-in + close (no overshoot). The springy
+     overshoot is applied inline by the drag handler only on snap-back, so the
+     elastic feel lives on the gesture, not the open animation. */
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* Flat same-colored extension below the sheet (zero blur, so it's a solid
+     fill, not a drop shadow). The drag snap-back overshoots the open position,
+     briefly lifting the sheet past its rest; this fills the gap that would
+     otherwise open under a bottom-anchored sheet. A pseudo-element can't do
+     this — overflow-y:auto would clip it — but box-shadow paints outside the
+     border box and escapes the clip. */
+  box-shadow: 0 140px 0 0 var(--bg-surface);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.sheet.is-open { transform: translateY(0); }
+
+.sheet__grabber {
+  /* <button> now — tapping dismisses the sheet. The visible bar is the
+     ::before line; the button itself is the larger tap target (≥44×24)
+     so the small 40×4 affordance still has room to fail-tap. */
+  display: block;
+  width: 60px;
+  height: 24px;
+  padding: 0;
+  margin: 0 auto 10px;
+  background: transparent;
+  border: none;
+  position: relative;
+}
+
+.sheet__grabber::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+}
+
+.sheet__grabber:active::before { background: var(--text-secondary); }
+
+.sheet__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.sheet__visual {
+  flex-shrink: 0;
+}
+
+.sheet__header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Glass illustration — copied from styles.css so the mobile page doesn't
+   pull in the kiosk's full stylesheet. Same component renders both surfaces
+   (see components/glass.js). */
+.glass-wrap {
+  display: inline-block;
+  aspect-ratio: 3 / 4;
+}
+.glass-wrap .glass {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.glass-outline {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.glass-liquid { opacity: 0.92; }
+
+.sheet__title {
+  font-size: 22px;
+  font-weight: 500;
+  margin: 0 0 4px;
+  letter-spacing: -0.01em;
+}
+
+.sheet__tagline {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ABV readout under the tagline. Small gap above so it doesn't sit flush
+   against the tagline text. */
+.sheet__abv {
+  margin-top: 6px;
+}
+
+.sheet__ingredients {
+  margin: 16px 0;
+  border-top: 1px solid var(--border-divider);
+  border-bottom: 1px solid var(--border-divider);
+  padding: 12px 0;
+}
+
+.sheet__ingredient {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+.sheet__ingredient-name { color: var(--text-primary); text-transform: capitalize; }
+.sheet__ingredient-vol  { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* Garnish + top-up — the guest adds these after the machine pours. The bright
+   label calls out the manual step and separates them from the machine-poured
+   rows above; the rows themselves render at full strength (same as the machine
+   rows) so they don't read as an afterthought. */
+.sheet__byhand-label {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-divider);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--status-ready);
+}
+
+.sheet__amount {
+  margin: 16px 0;
+}
+
+.sheet__amount-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.sheet__amount-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom range styling so the thumb is a comfortable phone tap target and the
+   track sits flush with the rest of the dark sheet. Browser defaults are too
+   light and the thumb is too small on mobile. */
+.sheet__slider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 32px;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+}
+
+.sheet__slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface-2);
+}
+
+.sheet__slider::-moz-range-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface-2);
+}
+
+.sheet__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--status-ready);
+  border: 3px solid var(--bg-surface);
+  margin-top: -11px;
+  box-shadow: 0 0 0 1px var(--border-emphasis);
+}
+
+.sheet__slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--status-ready);
+  border: 3px solid var(--bg-surface);
+  box-shadow: 0 0 0 1px var(--border-emphasis);
+}
+
+.sheet__strength {
+  margin: 16px 0;
+}
+
+.sheet__label {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0 0 8px;
+}
+
+.sheet__segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  background: var(--bg-surface-2);
+  border-radius: var(--radius-pill);
+  padding: 4px;
+}
+
+.sheet__segmented button {
+  padding: 10px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-height: 40px;
+}
+
+.sheet__segmented button.is-active {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+.sheet__order {
+  width: 100%;
+  margin-top: 16px;
+  padding: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--status-ready);
+  color: var(--bg-primary);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  min-height: 56px;
+}
+
+.sheet__order:active { opacity: 0.85; }
+
+.sheet__order[disabled] {
+  background: var(--bg-surface-2);
+  color: var(--text-tertiary);
+}
+
+.sheet__missing {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--status-error);
+  text-align: center;
+}
+
+/* --- Bottom queue tray -------------------------------------------------- */
+
+/* The tray sits over the page as fixed positioning; its peek height is what
+   the list reserves bottom padding for. When expanded, max-height grows so
+   the full list slides up; the body content keeps the same padding (the
+   tray just covers it temporarily, which is intentional — the user is
+   focused on the queue at that moment). */
+
+:root {
+  /* Worst-case peek height (Pour-next CTA visible: summary line, grabber,
+     heading, hint, Pour button, and the two-line finish-by-hand reminder).
+     Collapsed tray uses this as its max-height — natural content height
+     determines actual size when smaller, so shorter peeks don't inflate. The
+     list reserves this much bottom padding so the last drink card never sits
+     behind the peek. */
+  --tray-peek-h: 230px;
+}
+
+/* When the global queue is empty there's nothing to surface, so collapse
+   the tray entirely. Overriding --tray-peek-h to 0 cascades to the tray's
+   own max-height, the toast's bottom offset, and the list's bottom padding
+   — everything reflows in one shot via the existing transitions. The class
+   is toggled by order-tray.js on every queue update. */
+body.tray-empty {
+  --tray-peek-h: 0px;
+}
+
+.order-tray-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 18;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease-out;
+}
+
+.order-tray-backdrop.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.order-tray {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 19;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-emphasis);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  padding: 4px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  /* max-height + overflow-hidden lets the expand animation grow the tray
+     without jumping. The collapsed height is set by the peek content; the
+     expanded height is capped at 80vh so the rest of the page stays peeking
+     out at the top, hinting that the tray is a sheet that can be dismissed. */
+  max-height: var(--tray-peek-h);
+  overflow: hidden;
+  transition: max-height 280ms ease-out, transform 280ms ease-out;
+  display: flex;
+  flex-direction: column;
+  /* Flat same-colored extension below the tray (zero blur — a solid fill, not
+     a drop shadow). When the collapsed peek is elastic-dragged up, its bottom
+     would otherwise lift off the screen edge and reveal the page behind; this
+     block fills that gap so the surface reads as extending below the fold. A
+     pseudo-element can't do it (overflow:hidden clips), but box-shadow paints
+     outside the border box and escapes the clip.
+
+     Spread (not just offset) is what makes this work for the SHORT collapsed
+     peek: a zero-spread shadow is a copy of the box offset down, so any offset
+     larger than the tray's height leaves a void between the two. Here the
+     spread inflates the fill to the viewport's full width and the offset places
+     its top edge ~40px below the tray top (clear of the 16px rounded corners so
+     they still render), giving one continuous block ~540px tall that hugs the
+     tray bottom at any height. The large spread also flattens the fill's own
+     corner radius to a sub-pixel curve, so its edges read as square. Off-screen
+     at rest. */
+  box-shadow: 0 290px 0 250px var(--bg-surface);
+}
+
+/* Slide the tray fully off-screen when the queue is empty. max-height: 0
+   alone leaves the padding + border visible at the bottom edge, so we also
+   translate it down by its own height. pointer-events: none prevents stray
+   touches from registering on the now-invisible element. */
+body.tray-empty .order-tray {
+  transform: translateY(100%);
+  pointer-events: none;
+}
+
+.order-tray.is-expanded {
+  max-height: 80vh;
+}
+
+.order-tray__grabber {
+  align-self: center;
+  /* CLAUDE.md spec: minimum 44px tap target. The visible bar is the ::before
+     line; the button itself is the bigger tap area. */
+  width: 60px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.order-tray__grabber::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  /* Default: muted pill. The collapsed tray is still discoverable but
+     doesn't compete for attention when the guest has nothing personal
+     in the queue. */
+  background: var(--border-strong);
+  transition: background 200ms ease-out;
+}
+
+/* When the guest has their own drink in the queue, the pill lights up in
+   --status-ready so the tray reads as "your drink lives here" against the
+   otherwise flat dark page. */
+.order-tray.has-own-drink .order-tray__grabber::before {
+  background: var(--status-ready);
+}
+
+/* Wraps the peek + completion so render() can animate the swap between them
+   (fade + height morph). flex-shrink:0 keeps it sized to its content (the list
+   below takes the flex when expanded); overflow:hidden lets the height tween
+   clip cleanly. At rest its height is auto, so nothing is clipped. */
+.order-tray__content {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.order-tray__peek {
+  flex-shrink: 0;
+  padding: 4px 0 8px;
+}
+
+.order-tray__summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.order-tray__summary-label {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.order-tray__summary-count {
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 0;
+}
+
+.order-tray__chev {
+  font-size: 17px;
+  color: var(--text-primary);
+  transition: transform 220ms ease-out;
+}
+
+.order-tray.is-expanded .order-tray__chev {
+  transform: rotate(180deg);
+}
+
+.order-tray__pour-next {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.order-tray__pour-next[hidden] { display: none; }
+
+/* Color + scale pulse on the heading itself, since the prompt's job is to
+   tell the guest "drop what you're doing and walk over." Color cycles to
+   --status-ready so the line briefly matches the "ready" green elsewhere
+   in the app. inline-block lets transform: scale apply to a <span>.
+   prefers-reduced-motion users get the static heading. */
+@keyframes pour-cta-attention {
+  0%, 100% {
+    color: var(--text-primary);
+    transform: scale(1);
+  }
+  50% {
+    color: var(--status-ready);
+    transform: scale(1.05);
+  }
+}
+
+.order-tray__pour-heading {
+  display: inline-block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  transform-origin: left center;
+  animation: pour-cta-attention 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .order-tray__pour-heading { animation: none; }
+}
+
+.order-tray__pour-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Finish-by-hand reminder under the Pour button. Green ties it to the other
+   finish cues (the during-pour hint, the completion banner) so "what you add
+   by hand" reads in one consistent color across the flow. */
+.order-tray__pour-finish {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--status-ready);
+}
+
+.order-tray__pour-btn {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--status-ready);
+  color: var(--bg-primary);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  min-height: 48px;
+}
+
+.order-tray__pour-btn:active { opacity: 0.85; }
+
+/* Expanded list area — only visible because the tray's max-height grew
+   enough to show it. Scrolls if a guest queues a lot of drinks. */
+.order-tray__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--border-divider);
+  margin-top: 10px;
+}
+
+/* Collapsed peek must hide the list entirely. The tray's max-height
+   (--tray-peek-h, 180px) is a worst-case ceiling for the peek content;
+   if the list is left in the layout, its rows now bleed up into that
+   ceiling and the peek looks half-open. display: none collapses the
+   tray's natural height to grabber + summary (+ pour-next CTA if shown),
+   and the existing max-height transition still drives the expand reveal. */
+.order-tray:not(.is-expanded) .order-tray__list {
+  display: none;
+}
+
+.order-tray__list-heading {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0 0 8px;
+}
+
+.order-tray__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  min-height: 56px;
+  margin-bottom: 8px;
+}
+
+/* Subtle green left-stripe so the guest can find their own drinks at a
+   glance in the shared queue. Padding shifts to keep content position
+   stable vs the default 1px border. */
+.order-tray__row--own {
+  border-left: 3px solid var(--status-ready);
+  padding-left: 10px;
+}
+
+.order-tray__row-pos {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+}
+
+.order-tray__row-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.order-tray__row-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.order-tray__row-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+  margin-top: 2px;
+}
+
+/* Remove button uses the shared .queue-remove-btn class — see shared.css. */
+
+/* --- Toast -------------------------------------------------------------- */
+
+/* All visual treatment + layout lives in toast.css (shared with the kiosk).
+   Only mobile-specific position + stacking is here: sits above the bottom
+   tray's peek and respects the iOS safe-area inset so a "Removed from queue"
+   toast doesn't get covered by the tray. */
+.toast {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tray-peek-h) + 16px);
+  z-index: 30;
+}
+.toast-scrim {
+  z-index: 29;
+}

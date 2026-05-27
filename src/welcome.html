@@ -79,13 +79,16 @@
   <script>
     (function () {
       var btn = document.getElementById("continue");
-      var KIOSK_URL = "http://drinkbot.party/";
+      // Phones land on /order — the mobile ordering UI. The kiosk itself
+      // still loads "/" directly on the Pi (its Chromium target is unchanged),
+      // so this redirect only affects guests coming in over the AP.
+      var KIOSK_URL = "http://drinkbot.party/order";
       // Android intent URL — asks the OS to open the URL in Chrome
       // specifically, escaping the captive WebView. Stock Android's
       // CaptivePortalLogin honors this; some vendor skins ignore it and
       // treat it as a regular navigation, which is also fine.
       var INTENT_URL =
-        "intent://drinkbot.party/#Intent;scheme=http;package=com.android.chrome;end";
+        "intent://drinkbot.party/order#Intent;scheme=http;package=com.android.chrome;end";
 
       btn.addEventListener("click", function () {
         // Android: tell the captive WebView the user is done. Closes the
@@ -101,18 +104,18 @@
         if (/Android/i.test(ua)) {
           window.location.href = INTENT_URL;
           // If the intent didn't take (vendor skin or older WebView), fall
-          // back to a regular navigation after a beat. The IP is already
-          // marked signed-in from this page load, so the OS's next probe
-          // will succeed and captive will dismiss either way.
+          // back to a regular navigation after a beat. Loading /order marks
+          // the IP signed-in server-side, so the OS's next probe will succeed
+          // and captive will dismiss either way.
           setTimeout(function () { window.location.href = KIOSK_URL; }, 500);
           return;
         }
 
         // iOS and everything else: navigate within the captive browser.
-        // CNA can't programmatically escape itself, but this page load
-        // already marked the IP signed-in, which accelerates iOS's next
-        // probe and dismisses CNA. NFC users have a Safari tab queued
-        // up that finishes loading on dismiss.
+        // CNA can't programmatically escape itself, but loading /order marks
+        // the IP signed-in server-side, which makes iOS's next probe succeed
+        // and dismisses CNA. NFC users have a Safari tab queued up that
+        // finishes loading on dismiss.
         window.location.href = KIOSK_URL;
       });
     })();

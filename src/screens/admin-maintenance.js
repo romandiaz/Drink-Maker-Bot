@@ -1,11 +1,14 @@
 import { ingredientName } from "../ingredients.js";
 import { getJSON, postJSON } from "../api.js";
-import {
-  reloadInventory,
-  reloadCalibration,
-} from "../app.js";
 import { showToast } from "../components/toast.js";
 import { getMachineStatus, onMachineStatus } from "../machine-status.js";
+import { actionBtn, sectionHead, formatRate } from "../components/maint-ui.js";
+import { openCalibrate } from "../components/calibrate-modal.js";
+import {
+  openScaleCalibrateModal,
+  openScaleVisualizationModal,
+} from "../components/scale-modals.js";
+import { createBackupSection } from "./admin-backup.js";
 
 // Maintenance view for the admin tab shell. Three groups of canned routines:
 //
@@ -21,23 +24,15 @@ import { getMachineStatus, onMachineStatus } from "../machine-status.js";
 //   Reference rate  → The default rate used for slots without their own
 //                     measurement. Editable but rarely touched.
 //
+// Scale calibration, the slot-calibration flow, and backup/restore each live in
+// their own modules (scale-modals.js, calibrate-modal.js, admin-backup.js);
+// this file owns the core layout, the busy-lock state, and data loading.
+//
 // Calibration directly affects the pour-time estimates shown on the detail
 // and shot screens — see drinks.js#estimatePourSeconds.
 
 const PRIME_DURATION_SEC = 6;
 const FLUSH_DURATION_SEC = 15;
-// Long enough to dampen pump start-up jitter (first ~1s flow rate is uneven
-// while the line repressurises) but short enough that an admin doesn't lose
-// patience and the cup doesn't overflow at fast pump rates. ~60g at the
-// default rate ≈ 2 oz, which fits a standard shot glass.
-const CALIBRATE_DURATION_SEC = 8;
-
-function formatRate(ozPerSec) {
-  if (!Number.isFinite(ozPerSec) || ozPerSec <= 0) return "—";
-  // Display as seconds-per-ounce — easier to reason about for a person
-  // watching a stream than a fractional oz/sec figure.
-  return `${(1 / ozPerSec).toFixed(1)} s/oz`;
-}
 
 function row(label, valueEl) {
   const wrap = document.createElement("div");
@@ -47,31 +42,6 @@ function row(label, valueEl) {
   l.textContent = label;
   wrap.append(l, valueEl);
   return wrap;
-}
-
-function sectionHead(title, subtitle) {
-  const head = document.createElement("div");
-  head.className = "maint-section-head";
-  const t = document.createElement("div");
-  t.className = "maint-section-head__title";
-  t.textContent = title;
-  head.appendChild(t);
-  if (subtitle) {
-    const s = document.createElement("div");
-    s.className = "maint-section-head__sub";
-    s.textContent = subtitle;
-    head.appendChild(s);
-  }
-  return head;
-}
-
-function actionBtn(label, opts = {}) {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = `maint-btn tappable${opts.tone ? ` maint-btn--${opts.tone}` : ""}`;
-  btn.textContent = label;
-  if (opts.disabled) btn.disabled = true;
-  return btn;
 }
 
 export function adminMaintenanceView({ host, setMeta }) {
@@ -109,6 +79,9 @@ export function adminMaintenanceView({ host, setMeta }) {
     refreshDisabled();
   }
 
+  // Owns the on-device backup list; re-renders the whole view when it changes.
+  const backup = createBackupSection({ isLocked, setBusy, onChange: () => render() });
+
   async function load() {
     setMeta("Loading…");
     try {
@@ -119,6 +92,9 @@ export function adminMaintenanceView({ host, setMeta }) {
       inventory = inv;
       calibration = cal;
       render();
+      // Fetched separately and non-fatally: a backups-list hiccup shouldn't
+      // blank the whole maintenance screen. The list re-renders when it lands.
+      backup.load();
     } catch (e) {
       console.error(e);
       setMeta("Failed to load maintenance");
@@ -138,13 +114,12 @@ export function adminMaintenanceView({ host, setMeta }) {
     try {
       await postJSON(url, body);
       if (refreshInventory) {
-        // Prime/clean/calibrate all dispense liquid, so the bottle level
-        // shown elsewhere should reflect the run.
-        const inv = await getJSON("/api/inventory");
-        inventory = inv;
-        await reloadInventory();
+        // Prime/clean/calibrate all dispense liquid; pull our local snapshot
+        // back in sync. Other tablets' shared caches refresh via the
+        // INVENTORY_UPDATED WS broadcast the server emits on consume().
+        inventory = await getJSON("/api/inventory");
       }
-      if (successMsg) showToast(successMsg, { variant: "info", duration: 2500 });
+      if (successMsg) showToast(successMsg, { variant: "success", duration: 2500 });
     } catch (e) {
       console.error(e);
       showToast(`Failed — ${e.message}`);
@@ -181,9 +156,7 @@ export function adminMaintenanceView({ host, setMeta }) {
       }
     }
     try {
-      const inv = await getJSON("/api/inventory");
-      inventory = inv;
-      await reloadInventory();
+      inventory = await getJSON("/api/inventory");
     } catch {}
     setBusy(false);
     if (failures === 0) {
@@ -191,12 +164,48 @@ export function adminMaintenanceView({ host, setMeta }) {
         mode === "clean"
           ? `Flushed ${slots.length} slot${slots.length === 1 ? "" : "s"}`
           : `Primed ${slots.length} slot${slots.length === 1 ? "" : "s"}`,
-        { variant: "info", duration: 2500 }
+        { variant: "success", duration: 2500 }
       );
     } else {
       showToast(`${failures} of ${slots.length} runs failed`);
     }
     render();
+  }
+
+  function renderScaleCalibration() {
+    const card = document.createElement("section");
+    card.className = "maint-card";
+    card.appendChild(
+      sectionHead("Scale calibration", "Tare and calibrate the on-board load cell")
+    );
+
+    const buttons = document.createElement("div");
+    buttons.className = "maint-quick";
+    buttons.style.gridTemplateColumns = "repeat(3, 1fr)";
+
+    const tare = actionBtn("Tare scale");
+    tare.addEventListener("click", () =>
+      runEndpoint("/api/maintenance/scale-tare", {}, { successMsg: "Scale tared to 0" })
+    );
+    buttons.appendChild(tare);
+
+    const read = actionBtn("Read scale");
+    read.addEventListener("click", () => openScaleVisualizationModal({ host }));
+    buttons.appendChild(read);
+
+    const calibrate = actionBtn("Calibrate scale", { tone: "primary" });
+    calibrate.addEventListener("click", openScaleCalibrate);
+    buttons.appendChild(calibrate);
+
+    card.appendChild(buttons);
+
+    const note = document.createElement("p");
+    note.className = "maint-note";
+    note.textContent =
+      "Tare: zeroes out the current reading. Calibrate: uses a known weight to calculate the scale factor.";
+    card.appendChild(note);
+
+    return card;
   }
 
   function renderQuickActions() {
@@ -231,14 +240,14 @@ export function adminMaintenanceView({ host, setMeta }) {
   }
 
   function renderSlotRow(slot) {
-    const row = document.createElement("div");
-    row.className = "maint-slot";
-    if (!slot.ingredientId) row.classList.add("is-empty");
+    const slotRow = document.createElement("div");
+    slotRow.className = "maint-slot";
+    if (!slot.ingredientId) slotRow.classList.add("is-empty");
 
     const num = document.createElement("span");
     num.className = "maint-slot__num";
     num.textContent = String(slot.slot).padStart(2, "0");
-    row.appendChild(num);
+    slotRow.appendChild(num);
 
     const info = document.createElement("div");
     info.className = "maint-slot__info";
@@ -263,7 +272,7 @@ export function adminMaintenanceView({ host, setMeta }) {
     }
     info.appendChild(meta);
 
-    row.appendChild(info);
+    slotRow.appendChild(info);
 
     const actions = document.createElement("div");
     actions.className = "maint-slot__actions";
@@ -303,11 +312,11 @@ export function adminMaintenanceView({ host, setMeta }) {
       calBtn.disabled = true;
       calBtn.dataset.alwaysDisabled = "1";
     }
-    calBtn.addEventListener("click", () => openCalibrate(slot));
+    calBtn.addEventListener("click", () => openSlotCalibrate(slot));
     actions.appendChild(calBtn);
 
-    row.appendChild(actions);
-    return row;
+    slotRow.appendChild(actions);
+    return slotRow;
   }
 
   function renderSlotList() {
@@ -342,9 +351,12 @@ export function adminMaintenanceView({ host, setMeta }) {
   function render() {
     element.innerHTML = "";
     if (!inventory || !calibration) return;
+    element.appendChild(renderScaleCalibration());
     element.appendChild(renderQuickActions());
     element.appendChild(renderSlotList());
     element.appendChild(renderReference());
+    element.appendChild(backup.renderExport());
+    element.appendChild(backup.renderSaved());
     updateMeta();
     // Apply lock state to the freshly-rendered buttons; otherwise a re-render
     // during a remote pour would briefly enable everything until the next
@@ -352,143 +364,43 @@ export function adminMaintenanceView({ host, setMeta }) {
     refreshDisabled();
   }
 
-  // --- Calibration modal ---
-  // Run the pump for a fixed time, let the on-board scale weigh the result,
-  // and persist (grams / seconds) → oz/sec. The admin doesn't enter a
-  // number; they just place a cup on the platform and confirm the result.
+  // --- Modals ---
+  // Each modal module appends its overlay to `host` and returns it; we track
+  // the active one in calibrateModalEl so opening another (or unmounting the
+  // screen) tears down the previous. The live-read modal manages its own
+  // lifetime (it also holds a server-side scale session) and isn't tracked.
 
-  function openCalibrate(slot) {
+  function openSlotCalibrate(slot) {
     if (calibrateModalEl) calibrateModalEl.remove();
-    let phase = "ready"; // ready → running → result
-
-    const overlay = document.createElement("div");
-    overlay.className = "admin-picker";
-
-    const panel = document.createElement("div");
-    panel.className = "maint-cal__panel";
-    panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-modal", "true");
-
-    const title = document.createElement("div");
-    title.className = "admin-picker__title";
-    title.textContent = `Calibrate slot ${String(slot.slot).padStart(2, "0")} · ${ingredientName(slot.ingredientId)}`;
-    panel.appendChild(title);
-
-    const body = document.createElement("div");
-    body.className = "maint-cal__body";
-    panel.appendChild(body);
-
-    const actions = document.createElement("div");
-    actions.className = "maint-cal__actions";
-    panel.appendChild(actions);
-
-    overlay.appendChild(panel);
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay && phase !== "running") close();
-    });
-
-    function close() {
-      overlay.remove();
-      if (calibrateModalEl === overlay) calibrateModalEl = null;
-    }
-
-    function renderReady() {
-      phase = "ready";
-      body.innerHTML = "";
-      const p1 = document.createElement("p");
-      p1.className = "maint-cal__copy";
-      p1.textContent = `Place an empty cup on the platform under slot ${slot.slot}. We'll run the pump for ${CALIBRATE_DURATION_SEC} seconds and weigh what comes out.`;
-      body.appendChild(p1);
-
-      actions.innerHTML = "";
-      const cancel = actionBtn("Cancel");
-      cancel.dataset.alwaysEnabled = "1";
-      cancel.addEventListener("click", close);
-      const start = actionBtn("Start pour", { tone: "primary" });
-      start.dataset.alwaysEnabled = "1";
-      start.addEventListener("click", runPour);
-      actions.append(cancel, start);
-    }
-
-    async function runPour() {
-      phase = "running";
-      body.innerHTML = "";
-      const status = document.createElement("p");
-      status.className = "maint-cal__copy";
-      status.textContent = `Pouring for ${CALIBRATE_DURATION_SEC} seconds… don't touch the cup.`;
-      body.appendChild(status);
-      actions.innerHTML = "";
-      const wait = actionBtn("Pouring…");
-      wait.disabled = true;
-      wait.dataset.alwaysEnabled = "1";
-      actions.appendChild(wait);
-
-      // Lock the underlying maintenance card too — a stray prime tap during
-      // the calibration pour would jog the platform and skew the weight.
-      setBusy(true);
-      try {
-        const result = await postJSON("/api/maintenance/calibrate-measure", {
-          slot: slot.slot,
-          durationSec: CALIBRATE_DURATION_SEC,
-        });
+    calibrateModalEl = openCalibrate({
+      host,
+      slot,
+      setBusy,
+      refreshInventory: async () => {
         try {
           inventory = await getJSON("/api/inventory");
-          await reloadInventory();
         } catch {}
-        setBusy(false);
-        renderResult(result);
-      } catch (e) {
-        console.error(e);
-        setBusy(false);
-        showToast(`Calibration failed — ${e.message}`);
-        close();
-      }
-    }
+      },
+      onSaved: async () => {
+        calibration = await getJSON("/api/calibration");
+        render();
+      },
+      onClose: () => {
+        calibrateModalEl = null;
+      },
+    });
+  }
 
-    function renderResult(result) {
-      phase = "result";
-      body.innerHTML = "";
-      const copy = document.createElement("p");
-      copy.className = "maint-cal__copy";
-      copy.textContent = `Dispensed ${result.grams.toFixed(1)} g in ${result.durationSec} s.`;
-      body.appendChild(copy);
-
-      const rate = document.createElement("div");
-      rate.className = "maint-cal__rate";
-      rate.textContent = formatRate(result.ozPerSec);
-      body.appendChild(rate);
-
-      actions.innerHTML = "";
-      const repour = actionBtn("Re-run");
-      repour.dataset.alwaysEnabled = "1";
-      repour.addEventListener("click", runPour);
-      const save = actionBtn("Save calibration", { tone: "primary" });
-      save.dataset.alwaysEnabled = "1";
-      save.addEventListener("click", async () => {
-        try {
-          await postJSON("/api/maintenance/calibrate-save", {
-            slot: slot.slot,
-            ozPerSec: result.ozPerSec,
-          });
-          calibration = await getJSON("/api/calibration");
-          await reloadCalibration();
-          showToast(`Slot ${slot.slot} calibrated`, {
-            variant: "info",
-            duration: 2500,
-          });
-          close();
-          render();
-        } catch (e) {
-          console.error(e);
-          showToast(`Save failed — ${e.message}`);
-        }
-      });
-      actions.append(repour, save);
-    }
-
-    renderReady();
-    host.appendChild(overlay);
-    calibrateModalEl = overlay;
+  function openScaleCalibrate() {
+    if (calibrateModalEl) calibrateModalEl.remove();
+    calibrateModalEl = openScaleCalibrateModal({
+      host,
+      setBusy,
+      isLocked,
+      onClose: () => {
+        calibrateModalEl = null;
+      },
+    });
   }
 
   function mount() {

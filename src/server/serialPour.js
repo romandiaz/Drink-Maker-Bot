@@ -3,8 +3,10 @@
 //
 // Per-ingredient flow: look up the slot in inventory, convert oz -> grams
 // (flat 1.0 g/mL for now), send "POUR <slot> <grams> <max-sec>", await DONE.
-// Multi-ingredient drinks pour sequentially; the firmware tares before
-// each POUR so each call means "add this many grams from rest."
+// Multi-ingredient drinks pour sequentially; the firmware samples a
+// baseline weight at the start of each POUR and measures delta from
+// there, so each call means "add this many grams from rest" without
+// re-zeroing the HX711 tare offset that the glass watcher shares.
 //
 // max-sec is computed from the slot's calibrated flow rate × a slop factor
 // so the firmware's runaway-pour cap scales with the requested grams. Slow
@@ -22,6 +24,8 @@ import { consume, loadInventory } from "./inventory.js";
 import { sendCommand, sendRaw } from "./serial.js";
 import { record as recordPour } from "./pour-history.js";
 import { loadCalibration, flowRateForSlot } from "./calibration.js";
+import { readScaleStable } from "./maintenance.js";
+import { getGlassPresent, getEmptyRef } from "./glass-watch.js";
 
 const ML_PER_OZ = 29.5735;
 // Flat density covers spirits/juices to within ~5%. Per-ingredient density
@@ -38,6 +42,12 @@ const POUR_TIMEOUT_SLOP = 2.0;
 // to volume — without it a tiny 0.25oz pour at 0.25 oz/s would get a
 // 2-second budget, which is too tight when the scale needs ~150ms to settle.
 const POUR_TIMEOUT_BUFFER_SEC = 5;
+
+// Cap on the pre-pour glass wait. Without it, a user who taps Pour with no
+// glass and walks away would hold the machine lock — and block the shared
+// queue — indefinitely (the pouring screen is exempt from the kiosk's idle
+// auto-return). On timeout we fail the pour cleanly so the queue can advance.
+const GLASS_WAIT_TIMEOUT_MS = 120_000;
 
 export function serialPour(order, send) {
   const drink = order.customDrink || getDrinkById(order.drinkId);
@@ -65,6 +75,56 @@ export function serialPour(order, send) {
       loadCalibration(),
     ]);
     let cumulativeVolume = 0;
+
+    // Pre-pour glass wait. The ambient watcher (glass-watch.js) keeps
+    // glassPresent up to date during idle, so the common path — user
+    // places glass, then browses, then pours — skips this wait entirely.
+    //
+    // When the user did hit Pour with no glass on the platform, status
+    // has now flipped to "pouring", which pauses the watcher. So we
+    // re-implement its presence check inline here using the watcher's
+    // emptyRef (the same software zero it uses), and break out as soon
+    // as the delta crosses the placement threshold. We do NOT call TARE
+    // — that's the whole point of the new design; the firmware POUR
+    // below will sample its own baseline.
+    if (!cancelled && !getGlassPresent()) {
+      send({
+        type: "POUR_PROGRESS",
+        step: ingredients[0]?.name || "step",
+        stepIndex: 0,
+        totalSteps: ingredients.length,
+        pct: 0,
+        status: "waiting-for-glass",
+      });
+
+      const GLASS_THRESHOLD_G = 50;
+      const waitStart = Date.now();
+      while (!cancelled) {
+        let overThreshold = false;
+        try {
+          const r = await readScaleStable(3, 0.5);
+          if (!r.unstable && r.grams != null) {
+            // Prefer the watcher's reference if it has seeded; fall back
+            // to raw grams otherwise so a cold start (watcher hasn't
+            // produced its first reading yet) still works.
+            const ref = getEmptyRef();
+            const delta = ref == null ? r.grams : r.grams - ref;
+            if (delta > GLASS_THRESHOLD_G) overThreshold = true;
+          }
+        } catch (err) {
+          // Ignore transient errors while polling
+        }
+        if (overThreshold) break;
+        if (Date.now() - waitStart > GLASS_WAIT_TIMEOUT_MS) {
+          // Latch cancelled (same reason as the other error paths below) so a
+          // stale cancel() can't fire POUR_CANCELLED on the next pour.
+          cancelled = true;
+          send({ type: "POUR_ERROR", code: "NO_GLASS" });
+          return;
+        }
+        await new Promise((res) => setTimeout(res, 200));
+      }
+    }
 
     for (let stepIndex = 0; stepIndex < ingredients.length; stepIndex++) {
       if (cancelled) return;

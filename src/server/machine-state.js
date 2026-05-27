@@ -7,9 +7,12 @@
 //
 // Shape:
 //   { status: 'idle' | 'pouring' | 'maintenance',
-//     job:    null | { kind, drinkId?, slot?, mode?, startedAt, progress? } }
+//     job:    null | { kind, drinkId?, slot?, mode?, startedAt, progress? },
+//     lastOutcome: null | { type: "POUR_COMPLETE" | "POUR_ERROR" | "POUR_CANCELLED", ... },
+//     glassPresent: bool — maintained by glass-watch.js, broadcast here so
+//                          every connected client sees the same value }
 
-let state = { status: "idle", job: null };
+let state = { status: "idle", job: null, lastOutcome: null, glassPresent: false };
 let nextJobId = 1;
 const listeners = new Set();
 
@@ -42,13 +45,15 @@ export function acquire(job) {
   state = {
     status: job.kind === "pour" ? "pouring" : "maintenance",
     job: ownedJob,
+    lastOutcome: null,
+    glassPresent: state.glassPresent,
   };
   emit();
-  return function release() {
+  return function release(outcome = null) {
     // Guard against double-release: only clear if we still own the slot,
     // so a late release after a new acquire doesn't wipe someone else's job.
     if (!state.job || state.job.id !== jobId) return;
-    state = { status: "idle", job: null };
+    state = { status: "idle", job: null, lastOutcome: outcome, glassPresent: state.glassPresent };
     emit();
   };
 }
@@ -59,6 +64,15 @@ export function acquire(job) {
 export function updateJob(patch) {
   if (!state.job) return;
   state = { ...state, job: { ...state.job, ...patch } };
+  emit();
+}
+
+// Called by glass-watch.js whenever its state machine transitions. No-op
+// when the value hasn't changed, so the WS broadcast only fires on real
+// edges — clients don't get spammed with redundant updates.
+export function setGlassPresent(present) {
+  if (state.glassPresent === present) return;
+  state = { ...state, glassPresent: present };
   emit();
 }
 

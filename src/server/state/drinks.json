@@ -18,8 +18,7 @@
       ],
       "garnish": "olive",
       "color": "#E8DFA8",
-      "photo": "assets/drinks/martini.png",
-      "enabled": true
+      "photo": "assets/drinks/martini.png"
     },
     {
       "id": "manhattan",
@@ -43,8 +42,7 @@
       ],
       "garnish": "cherry",
       "color": "#B8483A",
-      "photo": "assets/drinks/manhattan.png",
-      "enabled": true
+      "photo": "assets/drinks/manhattan.png"
     },
     {
       "id": "negroni",
@@ -69,8 +67,7 @@
       "garnish": "orange-peel",
       "needsIce": true,
       "color": "#C94E3A",
-      "photo": "assets/drinks/negroni.png",
-      "enabled": true
+      "photo": "assets/drinks/negroni.png"
     },
     {
       "id": "old-fashioned",
@@ -252,7 +249,7 @@
       "glassType": "coupe",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "light-rum",
           "volumeOz": 1.5
         },
         {
@@ -271,6 +268,308 @@
       "garnish": "orange-peel",
       "color": "#D88A4A",
       "photo": "assets/drinks/el-presidente.png"
+    },
+    {
+      "id": "rob-roy",
+      "name": "Rob Roy",
+      "tagline": "Manhattan's Scottish cousin.",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 2
+        },
+        {
+          "name": "sweet-vermouth",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        }
+      ],
+      "garnish": "cherry",
+      "color": "#8C3A1A",
+      "photo": "assets/drinks/rob-roy.png"
+    },
+    {
+      "id": "old-pal",
+      "name": "Old Pal",
+      "tagline": "Bitter, dry, and sharp.",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 1
+        },
+        {
+          "name": "campari",
+          "volumeOz": 1
+        },
+        {
+          "name": "vermouth",
+          "volumeOz": 1
+        }
+      ],
+      "garnish": "lemon-peel",
+      "needsIce": true,
+      "color": "#B83A27",
+      "photo": "assets/drinks/old-pal.png"
+    },
+    {
+      "id": "lucien-gaudin",
+      "name": "Lucien Gaudin",
+      "tagline": "Fencing champion, bitter finish.",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "campari",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "triple-sec",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "vermouth",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "orange-peel",
+      "color": "#D64A38",
+      "photo": "assets/drinks/lucien-gaudin.png"
+    },
+    {
+      "id": "jasmine",
+      "name": "Jasmine",
+      "tagline": "Grapefruit illusion.",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "campari",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "triple-sec",
+          "volumeOz": 0.25
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "color": "#D85A4A",
+      "photo": "assets/drinks/jasmine.png"
+    },
+    {
+      "id": "scofflaw",
+      "name": "Scofflaw",
+      "tagline": "Prohibition defiance.",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "vermouth",
+          "volumeOz": 1
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "grenadine",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "orange-peel",
+      "color": "#D64A38",
+      "photo": "assets/drinks/scofflaw.png"
+    },
+    {
+      "id": "rosita",
+      "name": "Rosita",
+      "tagline": "Tequila negroni, perfected.",
+      "category": "classics",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "tequila",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "campari",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "sweet-vermouth",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "vermouth",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        }
+      ],
+      "garnish": "orange-peel",
+      "needsIce": true,
+      "color": "#C63A27",
+      "photo": "assets/drinks/rosita.png"
+    },
+    {
+      "id": "perfect-manhattan",
+      "name": "Perfect Manhattan",
+      "tagline": "Balanced on a knife edge.",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 2
+        },
+        {
+          "name": "sweet-vermouth",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "vermouth",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        }
+      ],
+      "garnish": "cherry",
+      "color": "#A83A27",
+      "photo": "assets/drinks/perfect-manhattan.png"
+    },
+    {
+      "id": "algonquin",
+      "name": "Algonquin",
+      "tagline": "Literary legend of the 1920s.",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "vermouth",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": "lemon-peel",
+      "color": "#D8A44A",
+      "photo": "assets/drinks/algonquin.png"
+    },
+    {
+      "id": "man-o-war",
+      "name": "Man O' War",
+      "tagline": "Kentucky thoroughbred in a glass.",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "sweet-vermouth",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "triple-sec",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "cherry",
+      "color": "#C65A27",
+      "photo": "assets/drinks/man-o-war.png"
+    },
+    {
+      "id": "the-blinker",
+      "name": "The Blinker",
+      "tagline": "A forgotten rye masterpiece.",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 2
+        },
+        {
+          "name": "grapefruit-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "grenadine",
+          "volumeOz": 0.25
+        }
+      ],
+      "garnish": "lemon-peel",
+      "color": "#D88A6A",
+      "photo": "assets/drinks/the-blinker.png"
+    },
+    {
+      "id": "siesta",
+      "name": "Siesta",
+      "tagline": "Tequila meets Campari in a hammock.",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "tequila",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "campari",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "grapefruit-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lime-wedge",
+      "color": "#D85A4A",
+      "photo": "assets/drinks/siesta.png"
     },
     {
       "id": "gin-tonic",
@@ -343,7 +642,7 @@
       "glassType": "highball",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "light-rum",
           "volumeOz": 1.5
         },
         {
@@ -581,7 +880,10 @@
         }
       ],
       "garnish": "lime-wedge",
-      "topUp": "ginger-beer",
+      "topUp": {
+        "name": "ginger-beer",
+        "volumeOz": 4
+      },
       "needsIce": true,
       "color": "#E0C68A",
       "photo": "assets/drinks/moscow-mule.png"
@@ -594,7 +896,7 @@
       "glassType": "highball",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "dark-rum",
           "volumeOz": 2
         },
         {
@@ -603,10 +905,338 @@
         }
       ],
       "garnish": "lime-wedge",
-      "topUp": "ginger-beer",
+      "topUp": {
+        "name": "ginger-beer",
+        "volumeOz": 4
+      },
       "needsIce": true,
       "color": "#8C5A2A",
       "photo": "assets/drinks/dark-and-stormy.png"
+    },
+    {
+      "id": "ranch-water",
+      "name": "Ranch Water",
+      "tagline": "West Texas hydration.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "tequila",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "soda",
+          "volumeOz": 4
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#E8EAD0",
+      "photo": "assets/drinks/ranch-water.png"
+    },
+    {
+      "id": "kentucky-mule",
+      "name": "Kentucky Mule",
+      "tagline": "Southern kick, sharp bite.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 2
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lime-wedge",
+      "topUp": {
+        "name": "ginger-beer",
+        "volumeOz": 4
+      },
+      "needsIce": true,
+      "color": "#D8A46A",
+      "photo": "assets/drinks/kentucky-mule.png"
+    },
+    {
+      "id": "campari-soda",
+      "name": "Campari Soda",
+      "tagline": "The Milanese afternoon.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "campari",
+          "volumeOz": 2
+        },
+        {
+          "name": "soda",
+          "volumeOz": 4
+        }
+      ],
+      "garnish": "orange-peel",
+      "needsIce": true,
+      "color": "#D24B3A",
+      "photo": "assets/drinks/campari-soda.png"
+    },
+    {
+      "id": "mexican-mule",
+      "name": "Mexican Mule",
+      "tagline": "Agave and ginger fire.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "tequila",
+          "volumeOz": 2
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lime-wedge",
+      "topUp": {
+        "name": "ginger-beer",
+        "volumeOz": 4
+      },
+      "needsIce": true,
+      "color": "#D8A46A",
+      "photo": "assets/drinks/mexican-mule.png"
+    },
+    {
+      "id": "gin-buck",
+      "name": "Gin Buck",
+      "tagline": "Gin, lemon, and ginger snap.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 2
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": {
+        "name": "ginger-beer",
+        "volumeOz": 4
+      },
+      "needsIce": true,
+      "color": "#E8D4A0",
+      "photo": "assets/drinks/gin-buck.png"
+    },
+    {
+      "id": "vodka-rickey",
+      "name": "Vodka Rickey",
+      "tagline": "Zero sugar, pure hydration.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "soda",
+          "volumeOz": 4
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#D8EAD0",
+      "photo": "assets/drinks/vodka-rickey.png"
+    },
+    {
+      "id": "rum-collins",
+      "name": "Rum Collins",
+      "tagline": "Light, effervescent rum cooler.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "light-rum",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "soda",
+          "volumeOz": 3
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "needsIce": true,
+      "color": "#F4E8B0",
+      "photo": "assets/drinks/rum-collins.png"
+    },
+    {
+      "id": "rum-buck",
+      "name": "Rum Buck",
+      "tagline": "Dark rum and a ginger snap.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "dark-rum",
+          "volumeOz": 2
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lime-wedge",
+      "topUp": {
+        "name": "ginger-beer",
+        "volumeOz": 4
+      },
+      "needsIce": true,
+      "color": "#D89A5A",
+      "photo": "assets/drinks/rum-buck.png"
+    },
+    {
+      "id": "whiskey-rickey",
+      "name": "Whiskey Rickey",
+      "tagline": "Bourbon with no sweet distractions.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 2
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "soda",
+          "volumeOz": 4
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#E0B88A",
+      "photo": "assets/drinks/whiskey-rickey.png"
+    },
+    {
+      "id": "paloma",
+      "name": "Paloma",
+      "tagline": "Mexico's true favorite.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "tequila",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "grapefruit-juice",
+          "volumeOz": 3
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "soda",
+          "volumeOz": 1.5
+        }
+      ],
+      "garnish": "salt-rim-lime",
+      "needsIce": true,
+      "color": "#F4C8C8",
+      "photo": "assets/drinks/paloma.png"
+    },
+    {
+      "id": "salty-dog",
+      "name": "Salty Dog",
+      "tagline": "Gin, grapefruit, and a salt rim.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "grapefruit-juice",
+          "volumeOz": 4.5
+        }
+      ],
+      "garnish": "salt-rim-lime",
+      "needsIce": true,
+      "color": "#F2D4C4",
+      "photo": "assets/drinks/salty-dog.png"
+    },
+    {
+      "id": "ruby",
+      "name": "Ruby",
+      "tagline": "Bitter, bright, and bubbly.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "campari",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "grapefruit-juice",
+          "volumeOz": 3
+        },
+        {
+          "name": "soda",
+          "volumeOz": 2
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#E87A6A",
+      "photo": "assets/drinks/ruby.png"
+    },
+    {
+      "id": "greyhound",
+      "name": "Greyhound",
+      "tagline": "Simple, tart, and classic.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "grapefruit-juice",
+          "volumeOz": 4.5
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#F2C8B4",
+      "photo": "assets/drinks/greyhound.png"
     },
     {
       "id": "margarita",
@@ -689,7 +1319,7 @@
       "glassType": "coupe",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "light-rum",
           "volumeOz": 2
         },
         {
@@ -879,6 +1509,298 @@
       "photo": "assets/drinks/pink-lady.png"
     },
     {
+      "id": "fitzgerald",
+      "name": "Fitzgerald",
+      "tagline": "Gin, lemon, and a dash of history.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 2
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "color": "#EADAA8",
+      "photo": "assets/drinks/fitzgerald.png"
+    },
+    {
+      "id": "rum-sour",
+      "name": "Rum Sour",
+      "tagline": "Dark rum, brightened up.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "dark-rum",
+          "volumeOz": 2
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "color": "#D8B87A",
+      "photo": "assets/drinks/rum-sour.png"
+    },
+    {
+      "id": "army-and-navy",
+      "name": "Army & Navy",
+      "tagline": "Almond meets sharp citrus.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 2
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "orgeat",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "color": "#E8D2A0",
+      "photo": "assets/drinks/army-and-navy.png"
+    },
+    {
+      "id": "pegu-club",
+      "name": "Pegu Club",
+      "tagline": "Burmese colonial classic.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 2
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "triple-sec",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        }
+      ],
+      "garnish": "lime-wedge",
+      "color": "#D8E4A8",
+      "photo": "assets/drinks/pegu-club.png"
+    },
+    {
+      "id": "bacardi-cocktail",
+      "name": "Bacardi Cocktail",
+      "tagline": "A rum daisy, strictly trademarked.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "light-rum",
+          "volumeOz": 2
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "grenadine",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lime-wedge",
+      "color": "#D64A6A",
+      "photo": "assets/drinks/bacardi-cocktail.png"
+    },
+    {
+      "id": "vodka-sour",
+      "name": "Vodka Sour",
+      "tagline": "Clean, tart, perfectly simple.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 2
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "color": "#E8E4A0",
+      "photo": "assets/drinks/vodka-sour.png"
+    },
+    {
+      "id": "camerons-kick",
+      "name": "Cameron's Kick",
+      "tagline": "Whiskey, almond, and Irish charm.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 2
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "orgeat",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "color": "#D8B87A",
+      "photo": "assets/drinks/camerons-kick.png"
+    },
+    {
+      "id": "gin-sour",
+      "name": "Gin Sour",
+      "tagline": "The elemental botanical sour.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 2
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "color": "#E8E8B0",
+      "photo": "assets/drinks/gin-sour.png"
+    },
+    {
+      "id": "gin-daisy",
+      "name": "Gin Daisy",
+      "tagline": "A sour with a ruby blush.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 2
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "grenadine",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "cherry",
+      "color": "#E88A8A",
+      "photo": "assets/drinks/gin-daisy.png"
+    },
+    {
+      "id": "hemingway-daiquiri",
+      "name": "Hemingway Daiquiri",
+      "tagline": "Papa's favorite rum sour.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "light-rum",
+          "volumeOz": 2
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "grapefruit-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.25
+        }
+      ],
+      "garnish": "lime-wedge",
+      "color": "#E8DCA8",
+      "photo": "assets/drinks/hemingway-daiquiri.png"
+    },
+    {
+      "id": "nevins",
+      "name": "Nevins",
+      "tagline": "A sharp, complex whiskey sour.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "grapefruit-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.25
+        },
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        }
+      ],
+      "garnish": "lemon-peel",
+      "color": "#E8A46A",
+      "photo": "assets/drinks/nevins.png"
+    },
+    {
       "id": "cosmopolitan",
       "name": "Cosmopolitan",
       "tagline": "Pink, cold, unapologetic.",
@@ -993,7 +1915,7 @@
           "volumeOz": 0.5
         },
         {
-          "name": "rum",
+          "name": "light-rum",
           "volumeOz": 0.5
         },
         {
@@ -1014,7 +1936,10 @@
         }
       ],
       "garnish": "lemon-wedge",
-      "topUp": "cola",
+      "topUp": {
+        "name": "cola",
+        "volumeOz": 1
+      },
       "needsIce": true,
       "color": "#7A4A2A",
       "photo": "assets/drinks/long-island-iced-tea.png"
@@ -1027,7 +1952,7 @@
       "glassType": "highball",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "light-rum",
           "volumeOz": 2
         },
         {
@@ -1036,7 +1961,10 @@
         }
       ],
       "garnish": "lime-wedge",
-      "topUp": "cola",
+      "topUp": {
+        "name": "cola",
+        "volumeOz": 5
+      },
       "needsIce": true,
       "color": "#4A2A1A",
       "photo": "assets/drinks/cuba-libre.png"
@@ -1118,8 +2046,8 @@
           "volumeOz": 2
         },
         {
-          "name": "grenadine",
-          "volumeOz": 0.5
+          "name": "peach-schnapps",
+          "volumeOz": 0.75
         }
       ],
       "garnish": "orange-peel",
@@ -1148,7 +2076,10 @@
         }
       ],
       "garnish": "chili-rim",
-      "topUp": "mexican-beer",
+      "topUp": {
+        "name": "mexican-beer",
+        "volumeOz": 3
+      },
       "needsIce": true,
       "color": "#B8763A",
       "photo": "assets/drinks/johnny-silverhand.png"
@@ -1174,7 +2105,10 @@
         }
       ],
       "garnish": null,
-      "topUp": "ginger-beer",
+      "topUp": {
+        "name": "ginger-beer",
+        "volumeOz": 4
+      },
       "needsIce": true,
       "color": "#F0A8A8",
       "photo": "assets/drinks/jackie-welles.png"
@@ -1196,7 +2130,10 @@
         }
       ],
       "garnish": null,
-      "topUp": "cola",
+      "topUp": {
+        "name": "cola",
+        "volumeOz": 3
+      },
       "needsIce": true,
       "color": "#4A2818",
       "photo": "assets/drinks/david-martinez.png"
@@ -1233,7 +2170,7 @@
     {
       "id": "rogue",
       "name": "Rogue",
-      "tagline": "Afterlife's queen takes her whiskey straight.",
+      "tagline": "Unapologetic, bold, and pulling the strings.",
       "category": "party",
       "glassType": "rocks",
       "ingredients": [
@@ -1276,7 +2213,10 @@
         }
       ],
       "garnish": null,
-      "topUp": "cola",
+      "topUp": {
+        "name": "cola",
+        "volumeOz": 3
+      },
       "needsIce": true,
       "color": "#3A2818",
       "photo": "assets/drinks/adam-smasher.png"
@@ -1372,7 +2312,7 @@
       "glassType": "coupe",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "light-rum",
           "volumeOz": 1.5
         },
         {
@@ -1393,6 +2333,296 @@
       "photo": "assets/drinks/the-relic.png"
     },
     {
+      "id": "caribbean-breeze",
+      "name": "Caribbean Breeze",
+      "tagline": "Island winds, bright and sweet.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "light-rum",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "cranberry-juice",
+          "volumeOz": 2
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 2
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#D64A6A",
+      "photo": "assets/drinks/caribbean-breeze.png"
+    },
+    {
+      "id": "gin-and-juice",
+      "name": "Gin and Juice",
+      "tagline": "Laid back.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 2.5
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 1.5
+        }
+      ],
+      "garnish": "orange-peel",
+      "needsIce": true,
+      "color": "#EAA43A",
+      "photo": "assets/drinks/gin-and-juice.png"
+    },
+    {
+      "id": "mexican-firing-squad",
+      "name": "Mexican Firing Squad",
+      "tagline": "Tequila and spice, no mercy.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "tequila",
+          "volumeOz": 2
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "grenadine",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#C63A40",
+      "photo": "assets/drinks/mexican-firing-squad.png"
+    },
+    {
+      "id": "batanga",
+      "name": "Batanga",
+      "tagline": "The soul of Tequila, Jalisco.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "tequila",
+          "volumeOz": 2
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "salt-rim-lime",
+      "topUp": {
+        "name": "cola",
+        "volumeOz": 5
+      },
+      "needsIce": true,
+      "color": "#4A2A1A",
+      "photo": "assets/drinks/batanga.png"
+    },
+    {
+      "id": "matador",
+      "name": "Matador",
+      "tagline": "Tequila and pineapple, no fuss.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "tequila",
+          "volumeOz": 2
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 3
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#E8D48A",
+      "photo": "assets/drinks/matador.png"
+    },
+    {
+      "id": "pineapple-margarita",
+      "name": "Pineapple Margarita",
+      "tagline": "Tropical agave fusion.",
+      "category": "party",
+      "glassType": "margarita",
+      "ingredients": [
+        {
+          "name": "tequila",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "triple-sec",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": "salt-rim-lime",
+      "color": "#EAD4A8",
+      "photo": "assets/drinks/pineapple-margarita.png"
+    },
+    {
+      "id": "pink-lemonade",
+      "name": "Pink Lemonade",
+      "tagline": "Adult summer refreshment.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "cranberry-juice",
+          "volumeOz": 1
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "needsIce": true,
+      "color": "#E8A4A4",
+      "photo": "assets/drinks/pink-lemonade.png"
+    },
+    {
+      "id": "whiskey-cola",
+      "name": "Whiskey & Cola",
+      "tagline": "The ultimate dive bar staple.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 2
+        }
+      ],
+      "garnish": "lime-wedge",
+      "topUp": {
+        "name": "cola",
+        "volumeOz": 5
+      },
+      "needsIce": true,
+      "color": "#3A2018",
+      "photo": "assets/drinks/whiskey-cola.png"
+    },
+    {
+      "id": "vodka-pineapple",
+      "name": "Vodka Pineapple",
+      "tagline": "Two ingredients, total escape.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 4
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#F4E88A",
+      "photo": "assets/drinks/vodka-pineapple.png"
+    },
+    {
+      "id": "sea-breeze",
+      "name": "Sea Breeze",
+      "tagline": "The 1980s beach staple.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "cranberry-juice",
+          "volumeOz": 3
+        },
+        {
+          "name": "grapefruit-juice",
+          "volumeOz": 1.5
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#D86A6A",
+      "photo": "assets/drinks/sea-breeze.png"
+    },
+    {
+      "id": "cantarito",
+      "name": "Cantarito",
+      "tagline": "The Paloma's fruitier cousin.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "tequila",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "grapefruit-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "soda",
+          "volumeOz": 2
+        }
+      ],
+      "garnish": "salt-rim-lime",
+      "needsIce": true,
+      "color": "#E8B46A",
+      "photo": "assets/drinks/cantarito.png"
+    },
+    {
       "id": "mai-tai",
       "name": "Mai Tai",
       "tagline": "Rum, almond, and a sunset.",
@@ -1400,7 +2630,7 @@
       "glassType": "rocks",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "dark-rum",
           "volumeOz": 1.5
         },
         {
@@ -1429,7 +2659,7 @@
       "glassType": "highball",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "light-rum",
           "volumeOz": 2
         },
         {
@@ -1454,7 +2684,7 @@
       "glassType": "highball",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "dark-rum",
           "volumeOz": 2
         },
         {
@@ -1487,7 +2717,7 @@
       "glassType": "highball",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "dark-rum",
           "volumeOz": 2
         },
         {
@@ -1516,7 +2746,7 @@
       "glassType": "rocks",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "dark-rum",
           "volumeOz": 1.5
         },
         {
@@ -1549,7 +2779,7 @@
       "glassType": "highball",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "dark-rum",
           "volumeOz": 1.5
         },
         {
@@ -1582,7 +2812,7 @@
       "glassType": "highball",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "dark-rum",
           "volumeOz": 1.5
         },
         {
@@ -1611,7 +2841,7 @@
       "glassType": "rocks",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "dark-rum",
           "volumeOz": 2
         },
         {
@@ -1640,7 +2870,7 @@
       "glassType": "highball",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "dark-rum",
           "volumeOz": 2
         },
         {
@@ -1694,7 +2924,10 @@
         }
       ],
       "garnish": "orange-peel",
-      "topUp": "ginger-beer",
+      "topUp": {
+        "name": "ginger-beer",
+        "volumeOz": 4
+      },
       "needsIce": true,
       "color": "#C97A3A",
       "photo": "assets/drinks/suffering-bastard.png"
@@ -1707,7 +2940,7 @@
       "glassType": "coupe",
       "ingredients": [
         {
-          "name": "rum",
+          "name": "light-rum",
           "volumeOz": 2
         },
         {
@@ -1722,7 +2955,1908 @@
       "garnish": "cherry",
       "color": "#E88A8A",
       "photo": "assets/drinks/mary-pickford.png"
+    },
+    {
+      "id": "chi-chi",
+      "name": "Chi Chi",
+      "tagline": "Pina Colada's cleaner cousin.",
+      "category": "tiki",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 2
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 3
+        },
+        {
+          "name": "coconut-cream",
+          "volumeOz": 1
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#F4ECD8",
+      "photo": "assets/drinks/chi-chi.png"
+    },
+    {
+      "id": "halekulani",
+      "name": "Halekulani Cocktail",
+      "tagline": "Waikiki beach, distilled.",
+      "category": "tiki",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "grenadine",
+          "volumeOz": 0.25
+        }
+      ],
+      "garnish": "orange-peel",
+      "needsIce": true,
+      "color": "#D86A3A",
+      "photo": "assets/drinks/halekulani.png"
+    },
+    {
+      "id": "royal-hawaiian",
+      "name": "Royal Hawaiian",
+      "tagline": "Gin meets the tropics.",
+      "category": "tiki",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "orgeat",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#D8C6A0",
+      "photo": "assets/drinks/royal-hawaiian.png"
+    },
+    {
+      "id": "humuhumunukunukuapuaa",
+      "name": "Humuhumunukunukuapua'a",
+      "tagline": "A long name for a fast drink.",
+      "category": "tiki",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 2
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "orgeat",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        }
+      ],
+      "garnish": "lime-wedge",
+      "needsIce": true,
+      "color": "#D8C4A0",
+      "photo": "assets/drinks/humuhumunukunukuapuaa.png"
+    },
+    {
+      "id": "eastern-sour",
+      "name": "Eastern Sour",
+      "tagline": "Trader Vic's whiskey triumph.",
+      "category": "tiki",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 2
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "orgeat",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "orange-peel",
+      "needsIce": true,
+      "color": "#D88A4A",
+      "photo": "assets/drinks/eastern-sour.png"
+    },
+    {
+      "id": "bermuda-hundred",
+      "name": "Bermuda Hundred",
+      "tagline": "Bitter campari meets the islands.",
+      "category": "tiki",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "campari",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "orgeat",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lime-wedge",
+      "color": "#C64A3A",
+      "photo": "assets/drinks/bermuda-hundred.png"
+    },
+    {
+      "id": "sharks-tooth",
+      "name": "Shark's Tooth",
+      "tagline": "A sharp, sweet bite of paradise.",
+      "category": "tiki",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "dark-rum",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "grenadine",
+          "volumeOz": 0.25
+        }
+      ],
+      "garnish": "cherry",
+      "needsIce": true,
+      "color": "#D85A4A",
+      "photo": "assets/drinks/sharks-tooth.png"
+    },
+    {
+      "id": "waikiki-beachcomber",
+      "name": "Waikiki Beachcomber",
+      "tagline": "A wave of gin and pineapple.",
+      "category": "tiki",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "triple-sec",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": "orange-peel",
+      "color": "#F4D4A8",
+      "photo": "assets/drinks/waikiki-beachcomber.png"
+    },
+    {
+      "id": "goombay-smash",
+      "name": "Goombay Smash",
+      "tagline": "Bahamian boat drink perfection.",
+      "category": "tiki",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "light-rum",
+          "volumeOz": 2
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 2
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "coconut-cream",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "orange-peel",
+      "needsIce": true,
+      "color": "#E8B46A",
+      "photo": "assets/drinks/goombay-smash.png"
+    },
+    {
+      "id": "clara-bow",
+      "name": "Clara Bow",
+      "tagline": "A silent era starlet with a bold bourbon voice.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "st-germain",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "grenadine",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": "mint-sprig",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#D4A574",
+      "enabled": true,
+      "photo": "assets/drinks/clara-bow.png"
+    },
+    {
+      "id": "maximillion-affair",
+      "name": "Maximillion Affair",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "st-germain",
+          "volumeOz": 1
+        },
+        {
+          "name": "sweet-vermouth",
+          "volumeOz": 0.35
+        },
+        {
+          "name": "campari",
+          "volumeOz": 0.1
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.25
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#A0623A",
+      "enabled": true,
+      "photo": "assets/drinks/maximillion-affair.png"
+    },
+    {
+      "id": "glasgow-mule",
+      "name": "Glasgow Mule",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "st-germain",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": {
+        "name": "ginger-beer",
+        "volumeOz": 4
+      },
+      "needsIce": true,
+      "color": "#F49E4C",
+      "enabled": true,
+      "photo": "assets/drinks/glasgow-mule.png"
+    },
+    {
+      "id": "sunflower",
+      "name": "Sunflower",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "st-germain",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "cointreau",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": false,
+      "color": "#F0E8C8",
+      "enabled": true,
+      "photo": "assets/drinks/sunflower.png"
+    },
+    {
+      "id": "goto",
+      "name": "Goto",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 2
+        },
+        {
+          "name": "st-germain",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": "mint-sprig",
+      "topUp": {
+        "name": "ginger-beer",
+        "volumeOz": 3
+      },
+      "needsIce": true,
+      "color": "#F0E8C8",
+      "enabled": true,
+      "photo": "assets/drinks/goto.png"
+    },
+    {
+      "id": "rib-tickler",
+      "name": "Rib Tickler",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "vermouth",
+          "volumeOz": 2
+        },
+        {
+          "name": "campari",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "gin",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "st-germain",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.25
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": {
+        "name": "soda",
+        "volumeOz": 1
+      },
+      "needsIce": false,
+      "color": "#F49E4C",
+      "enabled": true,
+      "photo": "assets/drinks/rib-tickler.png"
+    },
+    {
+      "id": "old-friend",
+      "name": "Old Friend",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "grapefruit-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "gin",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "campari",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "st-germain",
+          "volumeOz": 0.25
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#E85D9B",
+      "enabled": true,
+      "photo": "assets/drinks/old-friend.png"
+    },
+    {
+      "id": "easy-street",
+      "name": "Easy Street",
+      "tagline": "",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "gin",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "st-germain",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "soda",
+          "volumeOz": 3
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": false,
+      "color": "#F0E8C8",
+      "enabled": true,
+      "photo": "assets/drinks/easy-street.png"
+    },
+    {
+      "id": "sidecar",
+      "name": "Sidecar",
+      "tagline": "",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "cointreau",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#D4A574",
+      "enabled": true,
+      "photo": "assets/drinks/sidecar.png"
+    },
+    {
+      "id": "between-the-sheets",
+      "name": "Between the Sheets",
+      "tagline": "",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 1
+        },
+        {
+          "name": "light-rum",
+          "volumeOz": 1
+        },
+        {
+          "name": "cointreau",
+          "volumeOz": 1
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.25
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": false,
+      "color": "#F0E8C8",
+      "enabled": true,
+      "photo": "assets/drinks/between-the-sheets.png"
+    },
+    {
+      "id": "cointreau-fizz",
+      "name": "Cointreau Fizz",
+      "tagline": "",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "cointreau",
+          "volumeOz": 2
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "soda",
+          "volumeOz": 4
+        }
+      ],
+      "garnish": "lime-wedge",
+      "topUp": null,
+      "needsIce": true,
+      "color": "#F0E8C8",
+      "enabled": true,
+      "photo": "assets/drinks/cointreau-fizz.png"
+    },
+    {
+      "id": "the-jasmine",
+      "name": "The Jasmine",
+      "tagline": "",
+      "category": "party",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "cointreau",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "campari",
+          "volumeOz": 0.25
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#F0E8C8",
+      "enabled": true,
+      "photo": "assets/drinks/the-jasmine.png"
+    },
+    {
+      "id": "the-lucien-gaudin",
+      "name": "The Lucien Gaudin",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 1
+        },
+        {
+          "name": "cointreau",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "campari",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "vermouth",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "orange-peel",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#D4A574",
+      "enabled": true,
+      "photo": "assets/drinks/the-lucien-gaudin.png"
+    },
+    {
+      "id": "the-xyz",
+      "name": "The XYZ",
+      "tagline": "",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "light-rum",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "cointreau",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": false,
+      "color": "#F0E8C8",
+      "enabled": true,
+      "photo": "assets/drinks/the-xyz.png"
+    },
+    {
+      "id": "revolver",
+      "name": "Revolver",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        },
+        {
+          "name": "kahlua",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "whiskey",
+          "volumeOz": 2
+        }
+      ],
+      "garnish": "orange-peel",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#B8483A",
+      "enabled": true,
+      "photo": "assets/drinks/revolver.png"
+    },
+    {
+      "id": "black-russian",
+      "name": "Black Russian",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "kahlua",
+          "volumeOz": 1
+        },
+        {
+          "name": "vodka",
+          "volumeOz": 2
+        }
+      ],
+      "garnish": "cherry",
+      "topUp": null,
+      "needsIce": true,
+      "color": "#A0623A",
+      "enabled": true,
+      "photo": "assets/drinks/black-russian.png"
+    },
+    {
+      "id": "the-tigers-claw",
+      "name": "The Tiger's Claw",
+      "tagline": "",
+      "category": "tiki",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "kahlua",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "tequila",
+          "volumeOz": 2
+        }
+      ],
+      "garnish": "orange-peel",
+      "topUp": null,
+      "needsIce": true,
+      "color": "#F49E4C",
+      "enabled": true,
+      "photo": "assets/drinks/the-tigers-claw.png"
+    },
+    {
+      "id": "brave-bull",
+      "name": "Brave Bull",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "tequila",
+          "volumeOz": 2
+        },
+        {
+          "name": "kahlua",
+          "volumeOz": 1
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": null,
+      "needsIce": true,
+      "color": "#A47842",
+      "enabled": true,
+      "photo": "assets/drinks/brave-bull.png"
+    },
+    {
+      "id": "black-maria",
+      "name": "Black Maria",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "dark-rum",
+          "volumeOz": 2
+        },
+        {
+          "name": "kahlua",
+          "volumeOz": 1
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": true,
+      "color": "#6A3B22",
+      "enabled": true,
+      "photo": "assets/drinks/black-maria.png"
+    },
+    {
+      "id": "mind-eraser",
+      "name": "Mind Eraser",
+      "tagline": "",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "kahlua",
+          "volumeOz": 1
+        },
+        {
+          "name": "vodka",
+          "volumeOz": 1
+        },
+        {
+          "name": "soda",
+          "volumeOz": 2
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": true,
+      "color": "#6B4A32",
+      "enabled": true,
+      "photo": "assets/drinks/mind-eraser.png"
+    },
+    {
+      "id": "kahlua-sour",
+      "name": "Kahlua Sour",
+      "tagline": "",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "kahlua",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.25
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#BA8C5A",
+      "enabled": true,
+      "photo": "assets/drinks/kahlua-sour.png"
+    },
+    {
+      "id": "smoky-old-fashioned",
+      "name": "Smoky Old Fashioned",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 2
+        },
+        {
+          "name": "kahlua",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "bitters",
+          "volumeOz": 0.1
+        }
+      ],
+      "garnish": "orange-peel",
+      "topUp": null,
+      "needsIce": true,
+      "color": "#8C4A1F",
+      "enabled": true,
+      "photo": "assets/drinks/smoky-old-fashioned.png"
+    },
+    {
+      "id": "cuban-russian",
+      "name": "Cuban Russian",
+      "tagline": "",
+      "category": "classics",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "light-rum",
+          "volumeOz": 2
+        },
+        {
+          "name": "kahlua",
+          "volumeOz": 1
+        }
+      ],
+      "garnish": "cherry",
+      "topUp": null,
+      "needsIce": true,
+      "color": "#B58A4E",
+      "enabled": true,
+      "photo": "assets/drinks/cuban-russian.png"
+    },
+    {
+      "id": "kahlua-sunrise",
+      "name": "Kahlua Sunrise",
+      "tagline": "",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "tequila",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "kahlua",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 3
+        },
+        {
+          "name": "grenadine",
+          "volumeOz": 0.25
+        }
+      ],
+      "garnish": "orange-peel",
+      "topUp": null,
+      "needsIce": true,
+      "color": "#EF7A2A",
+      "enabled": true,
+      "photo": "assets/drinks/kahlua-sunrise.png"
+    },
+    {
+      "id": "dole-whip",
+      "name": "Dole Whip",
+      "tagline": "Like a Disney vacation.",
+      "category": "refreshers",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "coconut-rum",
+          "volumeOz": 1
+        },
+        {
+          "name": "vanilla-vodka",
+          "volumeOz": 1
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 1
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": true,
+      "color": "#F0E8C8",
+      "enabled": true,
+      "photo": "assets/drinks/dole-whip.png"
+    },
+    {
+      "id": "pineapple-bourbon-lemonade",
+      "name": "Pineapple Bourbon Lemonade",
+      "tagline": "Perfect for the front porch.",
+      "category": "sours",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "whiskey",
+          "volumeOz": 2.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 4
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": false,
+      "color": "#F0E8C8",
+      "enabled": true,
+      "photo": "assets/drinks/pineapple-bourbon-lemonade.png"
+    },
+    {
+      "id": "holy-water",
+      "name": "Holy Water",
+      "tagline": "Divine refreshment.",
+      "category": "refreshers",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 1
+        },
+        {
+          "name": "light-rum",
+          "volumeOz": 1
+        },
+        {
+          "name": "blue-curacao",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "soda",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.35
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.35
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": false,
+      "color": "#C8E6F0",
+      "enabled": true,
+      "photo": "assets/drinks/holy-water.png"
+    },
+    {
+      "id": "beach-water",
+      "name": "Beach Water",
+      "tagline": "Surfs up dude",
+      "category": "refreshers",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "coconut-rum",
+          "volumeOz": 1.25
+        },
+        {
+          "name": "vodka",
+          "volumeOz": 1.75
+        },
+        {
+          "name": "blue-curacao",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": null,
+      "topUp": {
+        "name": "lemon-lime-soda",
+        "volumeOz": 3
+      },
+      "needsIce": false,
+      "color": "#C8E6F0",
+      "enabled": true,
+      "photo": "assets/drinks/beach-water.png"
+    },
+    {
+      "id": "adios-muchachos",
+      "name": "Adios Muchachos",
+      "tagline": "Just enough chaos to make things interesting.",
+      "category": "party",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "gin",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "midori",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "blue-curacao",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": null,
+      "topUp": {
+        "name": "lemon-lime-soda",
+        "volumeOz": 2
+      },
+      "needsIce": false,
+      "color": "#5DCAA5",
+      "enabled": true,
+      "photo": "assets/drinks/adios-muchachos.png"
+    },
+    {
+      "id": "h-bomb",
+      "name": "H Bomb",
+      "tagline": "You may be obliterated.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "light-rum",
+          "volumeOz": 1
+        },
+        {
+          "name": "tequila",
+          "volumeOz": 1
+        },
+        {
+          "name": "vodka",
+          "volumeOz": 1
+        },
+        {
+          "name": "gin",
+          "volumeOz": 1
+        },
+        {
+          "name": "triple-sec",
+          "volumeOz": 1
+        },
+        {
+          "name": "hpnotiq",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.35
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.35
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": false,
+      "color": "#F0E8C8",
+      "enabled": true,
+      "photo": "assets/drinks/h-bomb.png"
+    },
+    {
+      "id": "tsunami",
+      "name": "Tsunami",
+      "tagline": "Ride the wave.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "coconut-rum",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "peach-schnapps",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "blue-curacao",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 3.25
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": null,
+      "topUp": {
+        "name": "lemon-lime-soda",
+        "volumeOz": 1.5
+      },
+      "needsIce": false,
+      "color": "#5DCAA5",
+      "enabled": true,
+      "photo": "assets/drinks/tsunami.png"
+    },
+    {
+      "id": "deep-blue-ocean",
+      "name": "Deep Blue Ocean",
+      "tagline": "",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "blue-curacao",
+          "volumeOz": 2
+        },
+        {
+          "name": "hpnotiq",
+          "volumeOz": 2
+        },
+        {
+          "name": "coconut-rum",
+          "volumeOz": 2
+        }
+      ],
+      "garnish": "cherry",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#C8E6F0",
+      "enabled": true,
+      "photo": "assets/drinks/deep-blue-ocean.png"
+    },
+    {
+      "id": "blue-hawaiian",
+      "name": "Blue Hawaiian",
+      "tagline": "",
+      "category": "tiki",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "light-rum",
+          "volumeOz": 1
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 2
+        },
+        {
+          "name": "blue-curacao",
+          "volumeOz": 1
+        },
+        {
+          "name": "coconut-cream",
+          "volumeOz": 1
+        }
+      ],
+      "garnish": "cherry",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#C8E6F0",
+      "enabled": true,
+      "photo": "assets/drinks/blue-hawaiian.png"
+    },
+    {
+      "id": "electric-smurf",
+      "name": "Electric Smurf",
+      "tagline": "Don't tell Gargamel",
+      "category": "party",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "coconut-rum",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "blue-curacao",
+          "volumeOz": 1
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 2
+        }
+      ],
+      "garnish": "cherry",
+      "topUp": {
+        "name": "lemon-lime-soda",
+        "volumeOz": 2
+      },
+      "needsIce": true,
+      "color": "#C8E6F0",
+      "enabled": true,
+      "photo": "assets/drinks/electric-smurf.png"
+    },
+    {
+      "id": "hawaii-five-oh",
+      "name": "Hawaii Five Oh",
+      "tagline": "Book em Dano",
+      "category": "tiki",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "light-rum",
+          "volumeOz": 2.5
+        },
+        {
+          "name": "blue-curacao",
+          "volumeOz": 2
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 3
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": false,
+      "color": "#C8E6F0",
+      "enabled": true,
+      "photo": "assets/drinks/hawaii-five-oh.png"
+    },
+    {
+      "id": "adios-motherfucker",
+      "name": "Adios Motherfucker",
+      "tagline": "Byebye.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "gin",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "light-rum",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "tequila",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "blue-curacao",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.35
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.35
+        }
+      ],
+      "garnish": null,
+      "topUp": {
+        "name": "soda",
+        "volumeOz": 1
+      },
+      "needsIce": false,
+      "color": "#C8E6F0",
+      "enabled": true,
+      "photo": "assets/drinks/adios-motherfucker.png"
+    },
+    {
+      "id": "purple-rain",
+      "name": "Purple Rain",
+      "tagline": "A drink fit for a legend.",
+      "category": "party",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "gin",
+          "volumeOz": 1
+        },
+        {
+          "name": "vodka",
+          "volumeOz": 1
+        },
+        {
+          "name": "blue-curacao",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "grenadine",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": true,
+      "color": "#E85D9B",
+      "enabled": true,
+      "photo": "assets/drinks/purple-rain.png"
+    },
+    {
+      "id": "mad-man",
+      "name": "Mad Man",
+      "tagline": "Time to get mad.",
+      "category": "party",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "coconut-rum",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "blue-curacao",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 2.25
+        }
+      ],
+      "garnish": null,
+      "topUp": {
+        "name": "lemon-lime-soda",
+        "volumeOz": 1.5
+      },
+      "needsIce": true,
+      "color": "#5DCAA5",
+      "enabled": true,
+      "photo": "assets/drinks/mad-man.png"
+    },
+    {
+      "id": "drunken-parrot",
+      "name": "Drunken Parrot",
+      "tagline": "A tropical getaway.",
+      "category": "tiki",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "coconut-rum",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "light-rum",
+          "volumeOz": 1
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 1.5
+        }
+      ],
+      "garnish": null,
+      "topUp": {
+        "name": "soda",
+        "volumeOz": 2
+      },
+      "needsIce": true,
+      "color": "#F49E4C",
+      "enabled": true,
+      "photo": "assets/drinks/drunken-parrot.png"
+    },
+    {
+      "id": "donkey-punch",
+      "name": "Donkey Punch",
+      "tagline": "DP for short.",
+      "category": "party",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "light-rum",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "dark-rum",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "cranberry-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "grenadine",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": null,
+      "topUp": null,
+      "needsIce": true,
+      "color": "#C94E3A",
+      "enabled": true,
+      "photo": "assets/drinks/donkey-punch.png"
+    },
+    {
+      "id": "creamsicle",
+      "name": "Creamsicle",
+      "tagline": "Childhood, in a glass.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vanilla-vodka",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 2.5
+        }
+      ],
+      "garnish": "orange-peel",
+      "topUp": {
+        "name": "lemon-lime-soda",
+        "volumeOz": 2
+      },
+      "needsIce": true,
+      "color": "#F4B860",
+      "enabled": true,
+      "photo": "assets/drinks/creamsicle.png"
+    },
+    {
+      "id": "vanilla-cosmo",
+      "name": "Vanilla Cosmo",
+      "tagline": "Cosmopolitan, with a sweet streak.",
+      "category": "party",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "vanilla-vodka",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "cranberry-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.25
+        }
+      ],
+      "garnish": "lemon-peel",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#E84A6A",
+      "enabled": true,
+      "photo": "assets/drinks/vanilla-cosmo.png"
+    },
+    {
+      "id": "vanilla-sky",
+      "name": "Vanilla Sky",
+      "tagline": "Lemon drop, in soft focus.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "vanilla-vodka",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#F4E4A0",
+      "enabled": true,
+      "photo": "assets/drinks/vanilla-sky.png"
+    },
+    {
+      "id": "japanese-slipper",
+      "name": "Japanese Slipper",
+      "tagline": "Bright, green, unmistakable.",
+      "category": "sours",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "midori",
+          "volumeOz": 1
+        },
+        {
+          "name": "triple-sec",
+          "volumeOz": 1
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 1
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#7FD64A",
+      "enabled": true,
+      "photo": "assets/drinks/japanese-slipper.png"
+    },
+    {
+      "id": "midori-sour",
+      "name": "Midori Sour",
+      "tagline": "Melon. Lemon. Done.",
+      "category": "sours",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "midori",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 1
+        },
+        {
+          "name": "simple-syrup",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "soda",
+          "volumeOz": 2
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": null,
+      "needsIce": true,
+      "color": "#B4E04A",
+      "enabled": true,
+      "photo": "assets/drinks/midori-sour.png"
+    },
+    {
+      "id": "tokyo-iced-tea",
+      "name": "Tokyo Iced Tea",
+      "tagline": "Long Island goes to Shibuya.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "gin",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "light-rum",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "tequila",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "triple-sec",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "midori",
+          "volumeOz": 0.5
+        },
+        {
+          "name": "lemon-juice",
+          "volumeOz": 0.75
+        }
+      ],
+      "garnish": "lemon-wedge",
+      "topUp": {
+        "name": "lemon-lime-soda",
+        "volumeOz": 2
+      },
+      "needsIce": true,
+      "color": "#8FB04A",
+      "enabled": true,
+      "photo": "assets/drinks/tokyo-iced-tea.png"
+    },
+    {
+      "id": "fuzzy-navel",
+      "name": "Fuzzy Navel",
+      "tagline": "The peach, doing the heavy lifting.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "peach-schnapps",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 4
+        }
+      ],
+      "garnish": "orange-peel",
+      "topUp": null,
+      "needsIce": true,
+      "color": "#F49E4C",
+      "enabled": true,
+      "photo": "assets/drinks/fuzzy-navel.png"
+    },
+    {
+      "id": "woo-woo",
+      "name": "Woo Woo",
+      "tagline": "Two syllables, full commitment.",
+      "category": "party",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "peach-schnapps",
+          "volumeOz": 0.75
+        },
+        {
+          "name": "cranberry-juice",
+          "volumeOz": 3
+        }
+      ],
+      "garnish": "lime-wedge",
+      "topUp": null,
+      "needsIce": true,
+      "color": "#E04A6A",
+      "enabled": true
+    },
+    {
+      "id": "hairy-navel",
+      "name": "Hairy Navel",
+      "tagline": "Fuzzy Navel, with backup.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 1
+        },
+        {
+          "name": "peach-schnapps",
+          "volumeOz": 1
+        },
+        {
+          "name": "orange-juice",
+          "volumeOz": 4
+        }
+      ],
+      "garnish": "orange-peel",
+      "topUp": null,
+      "needsIce": true,
+      "color": "#F4A040",
+      "enabled": true
+    },
+    {
+      "id": "hpnotiq-martini",
+      "name": "Hpnotiq Martini",
+      "tagline": "Turquoise on the rim.",
+      "category": "classics",
+      "glassType": "coupe",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "hpnotiq",
+          "volumeOz": 1
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lemon-peel",
+      "topUp": null,
+      "needsIce": false,
+      "color": "#5AC8E8",
+      "enabled": true
+    },
+    {
+      "id": "blue-lagoon-twist",
+      "name": "Blue Lagoon Twist",
+      "tagline": "Aqua, fizz, repeat.",
+      "category": "refreshers",
+      "glassType": "highball",
+      "ingredients": [
+        {
+          "name": "vodka",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "hpnotiq",
+          "volumeOz": 1.5
+        }
+      ],
+      "garnish": "lime-wedge",
+      "topUp": {
+        "name": "lemon-lime-soda",
+        "volumeOz": 3
+      },
+      "needsIce": true,
+      "color": "#4AB8E8",
+      "enabled": true
+    },
+    {
+      "id": "mermaid-water",
+      "name": "Mermaid Water",
+      "tagline": "Tropical, with a tide pull.",
+      "category": "party",
+      "glassType": "rocks",
+      "ingredients": [
+        {
+          "name": "coconut-rum",
+          "volumeOz": 1
+        },
+        {
+          "name": "hpnotiq",
+          "volumeOz": 1
+        },
+        {
+          "name": "pineapple-juice",
+          "volumeOz": 1.5
+        },
+        {
+          "name": "lime-juice",
+          "volumeOz": 0.5
+        }
+      ],
+      "garnish": "lime-wedge",
+      "topUp": null,
+      "needsIce": true,
+      "color": "#5DCAA5",
+      "enabled": true
     }
   ],
-  "updatedAt": "2026-05-06T00:42:48.618Z"
+  "updatedAt": "2026-05-27T06:09:29.599Z"
 }

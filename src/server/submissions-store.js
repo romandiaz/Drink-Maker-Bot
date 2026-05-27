@@ -44,6 +44,12 @@ export async function load() {
   }
 }
 
+// Re-read from disk after a backup restore.
+export async function reloadFromDisk() {
+  cache = null;
+  await load();
+}
+
 function uniqueId(base) {
   if (!cache.some((s) => s.id === base)) return base;
   let n = 2;

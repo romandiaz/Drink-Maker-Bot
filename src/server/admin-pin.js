@@ -43,6 +43,12 @@ async function load() {
   }
 }
 
+// Re-read from disk after a backup restore.
+export async function reloadFromDisk() {
+  cache = null;
+  await load();
+}
+
 export async function verifyPin(submitted) {
   const data = await load();
   return typeof submitted === "string" && submitted === data.pin;

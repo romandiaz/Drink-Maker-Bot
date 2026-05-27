@@ -1,10 +1,24 @@
 // Header component: station header used across every screen except idle-only moments.
 // Composes three slots — left (back button + titles), center (search pill), right (ready/count/custom).
 
-import { CHEVRON_LEFT_SVG, SEARCH_SVG, CLOSE_SVG, COG_SVG, BELL_SVG } from "../icons.js";
-import { getMachineStatus, onMachineStatus } from "../machine-status.js";
-import { goBack, navigate } from "../app.js";
+import { CHEVRON_LEFT_SVG, SEARCH_SVG, CLOSE_SVG, COG_SVG, BELL_SVG, HISTORY_SVG, HOME_SVG, POWER_SVG } from "../icons.js";
+import { goBack, navigate, resetStack } from "../app.js";
 import { requestAdminAccess } from "../admin-auth.js";
+import { on as onWS } from "../ws.js";
+import { postJSON } from "../api.js";
+import { showToast } from "./toast.js";
+import { createStatusPill } from "./status-pill.js";
+
+const notificationBtns = new Set();
+onWS("NOTIFICATION_ADDED", () => {
+  for (const btn of notificationBtns) {
+    if (!btn.isConnected) {
+      notificationBtns.delete(btn);
+    } else {
+      btn.classList.add("has-unseen");
+    }
+  }
+});
 
 export function backButton(onBack) {
   const btn = document.createElement("button");
@@ -18,43 +32,16 @@ export function backButton(onBack) {
   return btn;
 }
 
-// Reflects the live server-side machine state — every tablet sees the same
-// status, even ones that didn't initiate a pour. Indicators across all
-// mounted screens update together; orphaned ones are dropped from the
-// registry on the next tick after they leave the DOM.
-const indicatorRegistry = new Set();
-
-function applyStatus(el, status) {
-  const dot = el.querySelector(".ready-dot");
-  const label = el.querySelector(".ready-label");
-  if (!dot || !label) return;
-  el.classList.remove("ready-indicator--idle", "ready-indicator--busy");
-  if (status.status === "idle") {
-    el.classList.add("ready-indicator--idle");
-    label.textContent = "Ready";
-  } else {
-    el.classList.add("ready-indicator--busy");
-    label.textContent = status.status === "pouring" ? "Pouring" : "Maintenance";
-  }
-}
-
-onMachineStatus((status) => {
-  for (const el of indicatorRegistry) {
-    if (!el.isConnected) {
-      indicatorRegistry.delete(el);
-      continue;
-    }
-    applyStatus(el, status);
-  }
-});
-
+// The machine-status + queue pill. A button on every screen (bar the queue
+// screen itself) — tapping it opens the queue, so the queue is reachable from
+// anywhere without hunting for it. The pill itself (glass icon, pie wedge,
+// label, accents, pulse) lives in components/status-pill.js so the mobile
+// order page can reuse the exact same component.
 export function readyIndicator() {
-  const el = document.createElement("div");
-  el.className = "ready-indicator";
-  el.innerHTML = `<span class="ready-dot" aria-hidden="true"></span><span class="ready-label">Ready</span>`;
-  applyStatus(el, getMachineStatus());
-  indicatorRegistry.add(el);
-  return el;
+  return createStatusPill({
+    onTap: () => navigate("queue"),
+    ariaLabel: "Machine status — open the drink queue",
+  });
 }
 
 // Bell button — navigates to the standalone Notifications screen. Lives in
@@ -66,7 +53,100 @@ export function notificationsButton() {
   btn.className = "notifications-btn tappable";
   btn.setAttribute("aria-label", "Notifications");
   btn.innerHTML = BELL_SVG;
+
+  const dot = document.createElement("span");
+  dot.className = "notifications-indicator";
+  btn.appendChild(dot);
+
+  // Check for unseen notifications
+  fetch("/api/notifications")
+    .then((res) => res.json())
+    .then((data) => {
+      const entries = data.entries || [];
+      if (entries.length > 0) {
+        const latestTs = entries[0].ts;
+        const lastSeen = localStorage.getItem("lastSeenNotification");
+        if (!lastSeen || new Date(latestTs) > new Date(lastSeen)) {
+          btn.classList.add("has-unseen");
+        }
+      }
+    })
+    .catch(() => {});
+
   btn.addEventListener("click", () => navigate("notifications"));
+  notificationBtns.add(btn);
+  return btn;
+}
+
+// Home button — bails out of admin straight back to idle, bypassing the tab
+// history stack the back button walks. Lives just before the back button in
+// the admin header's left slot.
+export function homeButton() {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "home-btn tappable";
+  btn.setAttribute("aria-label", "Home");
+  btn.innerHTML = HOME_SVG;
+  btn.addEventListener("click", () => resetStack("idle"));
+  return btn;
+}
+
+// Restart button — exits the backend process so systemd (or our own respawn
+// helper) brings it back, then reloads every connected browser via the
+// SERVER_RESTART broadcast. Lets the operator pick up freshly-pulled code
+// without SSHing in. Two-tap to commit: the first tap swaps the icon for a
+// "Tap again to restart" label and arms a 4-second confirm window.
+export function restartButton() {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "restart-btn tappable";
+  btn.setAttribute("aria-label", "Restart app");
+
+  const icon = document.createElement("span");
+  icon.className = "restart-btn__icon";
+  icon.innerHTML = POWER_SVG;
+  btn.appendChild(icon);
+
+  const label = document.createElement("span");
+  label.className = "restart-btn__label";
+  label.textContent = "Tap again to restart";
+  btn.appendChild(label);
+
+  let confirmTimer = null;
+  function disarm() {
+    if (confirmTimer) {
+      clearTimeout(confirmTimer);
+      confirmTimer = null;
+    }
+    btn.classList.remove("is-confirming");
+  }
+
+  btn.addEventListener("click", async () => {
+    if (confirmTimer) {
+      disarm();
+      try {
+        await postJSON("/api/system/restart", {});
+        // The SERVER_RESTART broadcast (handled in ws.js) reloads this page.
+      } catch (e) {
+        showToast(`Restart failed — ${e.message}`);
+      }
+      return;
+    }
+    btn.classList.add("is-confirming");
+    confirmTimer = setTimeout(disarm, 4000);
+  });
+
+  return btn;
+}
+
+// History button — navigates to the standalone History screen.
+export function historyButton() {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "history-btn tappable";
+  btn.setAttribute("aria-label", "History");
+  btn.innerHTML = HISTORY_SVG;
+  btn.addEventListener("click", () => navigate("history"));
   return btn;
 }
 
@@ -165,6 +245,7 @@ function leftTitles({ eyebrow, eyebrowAccent, title }) {
  * Build the station header. Slots:
  *   back       — show a 36×36 back button (default true)
  *   onBack     — click handler for back button (defaults to goBack — i.e. pop the history stack)
+ *   leftExtra  — optional HTMLElement mounted in the left slot, before the back button
  *   eyebrow    — small uppercase label above title (e.g. "STATION 01", "CATEGORY 01")
  *   eyebrowAccent — color for the eyebrow (e.g. category accent var)
  *   title      — screen title (e.g. "Choose a category", "The Classics")
@@ -177,6 +258,7 @@ export function header(opts = {}) {
   const {
     back = true,
     onBack,
+    leftExtra,
     eyebrow,
     eyebrowAccent,
     title,
@@ -191,6 +273,7 @@ export function header(opts = {}) {
 
   const left = document.createElement("div");
   left.className = "app-header__left";
+  if (leftExtra instanceof HTMLElement) left.appendChild(leftExtra);
   if (back) left.appendChild(backButton(onBack));
   if (eyebrow || title) left.appendChild(leftTitles({ eyebrow, eyebrowAccent, title }));
   el.appendChild(left);

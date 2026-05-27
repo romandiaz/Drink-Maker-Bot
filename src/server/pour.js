@@ -128,14 +128,32 @@ export function mockPour(order, send) {
         defaultFlowOzPerSec: cal.defaultFlowOzPerSec,
       });
       totalSeconds = (POUR_SETUP_SECONDS + body) / SPEED_MULT;
-      startStep();
+      
+      send({
+        type: "POUR_PROGRESS",
+        step: ingredients[0]?.name || "step",
+        stepIndex: 0,
+        totalSteps: ingredients.length,
+        pct: 0,
+        status: "waiting-for-glass",
+      });
+      timer = setTimeout(startStep, 3000);
     })
     .catch(() => {
       // Calibration load failed — fall back to the legacy constant so a
       // mock pour still completes during dev.
       if (cancelled) return;
       totalSeconds = (POUR_SETUP_SECONDS + totalVolume * 4.0) / SPEED_MULT;
-      startStep();
+      
+      send({
+        type: "POUR_PROGRESS",
+        step: ingredients[0]?.name || "step",
+        stepIndex: 0,
+        totalSteps: ingredients.length,
+        pct: 0,
+        status: "waiting-for-glass",
+      });
+      timer = setTimeout(startStep, 3000);
     });
 
   return function cancel() {

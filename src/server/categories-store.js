@@ -42,6 +42,12 @@ export async function load() {
   }
 }
 
+// Re-read from disk after a backup restore.
+export async function reloadFromDisk() {
+  cache = null;
+  await load();
+}
+
 export async function save(input) {
   if (!cache) await load();
   const ids = Array.isArray(input?.disabledIds)

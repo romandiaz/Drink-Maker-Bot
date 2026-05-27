@@ -5,18 +5,23 @@ import { glass, layeredGlass } from "../components/glass.js";
 import { appState, setBuildDraft } from "../state.js";
 import { CHECK_SVG } from "../icons.js";
 import { formatByHand, formatGarnishProse, formatTopUpProse, joinList } from "../format.js";
+import { showToast } from "../components/toast.js";
+import { onMachineStatus } from "../machine-status.js";
 
 const AUTO_RETURN_S = 20;
 
 export function complete(props = {}) {
-  const drinkId = props.drinkId || appState.lastDrink || drinks[0].id;
-  // Shots aren't in drinks[] — the synthesized drink lives on pendingOrder.
-  const drink =
-    (appState.pendingOrder?.drinkId === drinkId &&
-      appState.pendingOrder?.customDrink) ||
-    getDrinkById(drinkId);
+  // The pouring screen passes the finished order along; fall back to
+  // pendingOrder / lastDrink defensively.
+  const order = props.order || appState.pendingOrder || null;
+  const drinkId = order?.drinkId || props.drinkId || appState.lastDrink || drinks[0].id;
+  // Shots / custom builds aren't in drinks[] — their definition rides on the order.
+  const drink = order?.customDrink || getDrinkById(drinkId);
 
   let countdownTimer = null;
+  let unsubscribeStatus = null;
+  let mounted = false;
+  let sawGlass = false;
   let secondsLeft = AUTO_RETURN_S;
 
   const element = document.createElement("section");
@@ -62,9 +67,9 @@ export function complete(props = {}) {
   // decorative garnish. Listed in that order — recipe components first, then
   // mixers, then garnish — to match the natural pour-and-finish sequence.
   const parts = [];
-  const byHand = appState.pendingOrder?.missingByHand || [];
+  const byHand = order?.missingByHand || [];
   for (const ing of byHand) parts.push(formatByHand(ing));
-  if (drink.topUp) parts.push(formatTopUpProse(drink.topUp));
+  if (drink.topUp) parts.push(formatTopUpProse(drink.topUp, order?.amount ?? 1));
   if (drink.garnish) parts.push(formatGarnishProse(drink.garnish));
   if (parts.length) {
     const hint = document.createElement("div");
@@ -146,13 +151,34 @@ export function complete(props = {}) {
     countdown.textContent = `Returning to idle in ${secondsLeft}s`;
   }
 
+  // Glass-lift detection piggybacks on glass-watch.js, which already maintains
+  // `glassPresent` system-wide and broadcasts it via MACHINE_STATE. We just
+  // wait for a true→false edge — no per-screen polling, no maintenance-lock
+  // churn flashing the header indicator. In mock mode the watcher isn't
+  // running, so glassPresent stays false and the 20s countdown handles return.
   function mount() {
+    mounted = true;
     countdownTimer = setInterval(tick, 1000);
     element.addEventListener("pointerdown", resetCountdown);
+
+    unsubscribeStatus = onMachineStatus((status) => {
+      if (!mounted) return;
+      if (status.glassPresent) {
+        sawGlass = true;
+      } else if (sawGlass) {
+        showToast("Cheers!", { variant: "success", log: false, duration: 3000 });
+        resetStack("idle");
+      }
+    });
   }
 
   function unmount() {
+    mounted = false;
     if (countdownTimer) clearInterval(countdownTimer);
+    if (unsubscribeStatus) {
+      unsubscribeStatus();
+      unsubscribeStatus = null;
+    }
     element.removeEventListener("pointerdown", resetCountdown);
   }
 

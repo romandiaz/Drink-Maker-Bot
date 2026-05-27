@@ -48,6 +48,12 @@ export function textInputModal({
       current = current.slice(0, -1);
       paintDisplay();
     },
+    onEnter: () => onDone(current.trim()),
+    onPaste: (text) => {
+      current = (current + text).slice(0, maxLength);
+      paintDisplay();
+    },
+    getValue: () => current,
   });
   panel.appendChild(kb);
 

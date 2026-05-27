@@ -1,4 +1,4 @@
-import { navigate } from "../app.js";
+import { navigate, resetStack } from "../app.js";
 import {
   buildShotDrink,
   estimatePourSeconds,
@@ -6,13 +6,22 @@ import {
   shotIngredients,
 } from "../drinks.js";
 import { header } from "../components/header.js";
-import { setPendingOrder } from "../state.js";
 import { ingredientName } from "../ingredients.js";
 import { loadInventory, remainingForIngredient } from "../inventory-store.js";
 import {
   defaultFlowOzPerSec,
   flowRateForIngredient,
 } from "../calibration-store.js";
+import { formatDuration } from "../format.js";
+import { onMachineStatus } from "../machine-status.js";
+import { showQueueToast } from "../components/toast.js";
+import {
+  addToQueue,
+  onQueueChange,
+  isQueueFull,
+  canPourNow,
+  queueToasts,
+} from "../queue-store.js";
 
 const MIN_OZ = 0.25;
 const MAX_OZ = 3.0;
@@ -196,16 +205,28 @@ export function shotDetail(props = {}) {
 
   // ---------- Interaction ----------
 
-  function onPour() {
+  async function onPour() {
     pourBtn.disabled = true;
     const customDrink = buildShotDrink(ing.id, volumeOz, displayName);
-    setPendingOrder({
+    const order = {
       drinkId: customDrink.id,
       strength: "regular",
       amount: 1.0,
       customDrink,
-    });
-    navigate("pouring", { drinkId: customDrink.id });
+    };
+    // Pours now if the machine is free, otherwise joins the shared queue —
+    // the server decides and tells us which.
+    const res = await addToQueue(order);
+    if (res.rejected) {
+      showQueueToast(queueToasts.full());
+      renderVolume();
+    } else if (res.pouringNow) {
+      navigate("pouring", { order });
+    } else {
+      // Queued behind a busy machine — land on the queue screen.
+      showQueueToast(queueToasts.added(res.position));
+      resetStack("idle", "queue");
+    }
   }
 
   function setVolume(next, { fromUser = false } = {}) {
@@ -261,16 +282,23 @@ export function shotDetail(props = {}) {
       stockNote.textContent = "";
     }
 
-    pourBtn.disabled = outOfStock;
     if (outOfStock) {
+      pourBtn.disabled = true;
       pourBtn.textContent = "Refill to pour";
-    } else {
+    } else if (isQueueFull()) {
+      pourBtn.disabled = true;
+      pourBtn.textContent = "Queue full — try shortly";
+    } else if (canPourNow()) {
+      pourBtn.disabled = false;
       const preview = buildShotDrink(ing.id, volumeOz, displayName);
       const seconds = estimatePourSeconds(preview, "regular", 1.0, {
         flowRateForIngredient,
         defaultFlowOzPerSec: defaultFlowOzPerSec(),
       });
-      pourBtn.textContent = `Pour · Ready in ~${seconds}s`;
+      pourBtn.textContent = `Pour · Ready in ~${formatDuration(seconds)}`;
+    } else {
+      pourBtn.disabled = false;
+      pourBtn.textContent = "Add to queue";
     }
   }
 
@@ -308,6 +336,8 @@ export function shotDetail(props = {}) {
   stage.addEventListener("pointercancel", onPointerUp);
 
   renderVolume();
+  let unsubMachine = null;
+  let unsubQueue = null;
   return {
     element,
     mount() {
@@ -319,7 +349,20 @@ export function shotDetail(props = {}) {
       loadInventory().then(() => {
         if (remainingForIngredient(ing.id) !== before) renderVolume();
       });
+      // Keep the Pour / Add-to-queue label honest as the machine and the
+      // shared queue change while the user is sizing this shot.
+      unsubMachine = onMachineStatus(() => renderVolume());
+      unsubQueue = onQueueChange(() => renderVolume());
     },
-    unmount() {},
+    unmount() {
+      if (unsubMachine) {
+        unsubMachine();
+        unsubMachine = null;
+      }
+      if (unsubQueue) {
+        unsubQueue();
+        unsubQueue = null;
+      }
+    },
   };
 }

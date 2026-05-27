@@ -11,6 +11,8 @@
 // Once you see "READY", type a command + Enter:
 //   READ
 //   TARE
+//   STABLE              (defaults: 3 samples, 0.5g tolerance)
+//   STABLE 5 0.3        (5 samples, 0.3g tolerance)
 //   RUN 1 500
 //   POUR 1 30
 //   PING

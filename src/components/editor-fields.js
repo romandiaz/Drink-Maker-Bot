@@ -100,3 +100,29 @@ export function ingredientRow(ingredient, { onPick, onVolume, onRemove }) {
 
   return row;
 }
+
+// Standalone +/- volume stepper (oz). Used for the post-pour top-up amount;
+// ingredientRow keeps its own inline copy.
+export function volumeStepper(value, onChange, { min = 0.5, max = 12, step = 0.5 } = {}) {
+  const stepper = document.createElement("div");
+  stepper.className = "editor-ing__stepper";
+  const minus = document.createElement("button");
+  minus.type = "button";
+  minus.className = "editor-ing__step tappable";
+  minus.textContent = "−";
+  minus.addEventListener("click", () =>
+    onChange(Math.max(min, Number((value - step).toFixed(2))))
+  );
+  const vol = document.createElement("span");
+  vol.className = "editor-ing__vol";
+  vol.textContent = `${value.toFixed(2)} oz`;
+  const plus = document.createElement("button");
+  plus.type = "button";
+  plus.className = "editor-ing__step tappable";
+  plus.textContent = "+";
+  plus.addEventListener("click", () =>
+    onChange(Math.min(max, Number((value + step).toFixed(2))))
+  );
+  stepper.append(minus, vol, plus);
+  return stepper;
+}

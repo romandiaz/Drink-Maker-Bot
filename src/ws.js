@@ -85,3 +85,32 @@ export function on(type, handler) {
   handlers.get(type).add(handler);
   return () => handlers.get(type).delete(handler);
 }
+
+// Operator-initiated backend restart: every connected page polls until the
+// backend is reachable again, then reloads. Lives here (not in app.js /
+// order.js) so the kiosk and the mobile order page both pick it up without
+// duplicating the wiring. Polling instead of a fixed delay matters because
+// the systemd unit has RestartSec=3 — a naive 2s timeout would land us on
+// a dead server and Chromium would show a "site can't be reached" page.
+on("SERVER_RESTART", () => {
+  const deadline = Date.now() + 30000;
+  (async function pollAndReload() {
+    // Give the backend a moment to actually exit before we start polling,
+    // otherwise the first probe just hits the dying instance and resolves
+    // successfully — reloading too early lands on the same code we're
+    // trying to refresh away from.
+    await new Promise((r) => setTimeout(r, 1500));
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch("/api/inventory", { cache: "no-store" });
+        if (res.ok) {
+          location.reload();
+          return;
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    // Fallback: reload anyway. Better than sitting on a stale page forever.
+    location.reload();
+  })();
+});

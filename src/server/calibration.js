@@ -38,6 +38,19 @@ function emptyCalibration() {
 }
 
 let cache = null;
+const listeners = new Set();
+
+// Notify subscribers (index.js wires this to a WS broadcast) so every
+// connected tablet's calibration-store cache stays in sync without polling.
+export function subscribe(listener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+function emit() {
+  for (const l of listeners) {
+    try { l(cache); } catch (e) { console.error("calibration listener error:", e); }
+  }
+}
 
 export async function loadCalibration() {
   if (cache) return cache;
@@ -83,7 +96,16 @@ function sanitize(payload) {
 export async function saveCalibration(payload) {
   cache = sanitize(payload);
   await persist(cache);
+  emit();
   return cache;
+}
+
+// Re-read from disk after a backup restore, then notify subscribers so every
+// tablet's calibration cache refreshes.
+export async function reloadFromDisk() {
+  cache = null;
+  await loadCalibration();
+  emit();
 }
 
 // Update one slot's rate. Used by the calibration flow once an admin enters
@@ -95,6 +117,7 @@ export async function setSlotRate(slot, ozPerSec) {
   next.updatedAt = new Date().toISOString();
   cache = next;
   await persist(cache);
+  emit();
   return cache;
 }
 
@@ -106,6 +129,7 @@ export async function clearSlotRate(slot) {
   next.updatedAt = new Date().toISOString();
   cache = next;
   await persist(cache);
+  emit();
   return cache;
 }
 

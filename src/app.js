@@ -4,15 +4,22 @@ import { search } from "./screens/search.js";
 import { drinkList } from "./screens/drink-list.js";
 import { detail } from "./screens/detail.js";
 import { pouring } from "./screens/pouring.js";
+import { queue } from "./screens/queue.js";
 import { complete } from "./screens/complete.js";
 import { shotPicker } from "./screens/shot-picker.js";
 import { shotDetail } from "./screens/shot-detail.js";
 import { buildYourOwn } from "./screens/build-your-own.js";
+import { surprise } from "./screens/surprise.js";
 import { admin } from "./screens/admin.js";
 import { notifications } from "./screens/admin-notifications.js";
+import { history } from "./screens/admin-history.js";
+import { drinkStats } from "./screens/admin-drink-stats.js";
+import { ingredientStats } from "./screens/admin-ingredient-stats.js";
 import { on, onStatusChange, startWS } from "./ws.js";
+import { getMachineStatus, onMachineStatus } from "./machine-status.js";
 import { replaceDrinks, setCategoryEnabledLookup } from "./drinks.js";
 import { loadInventory } from "./inventory-store.js";
+import { loadIngredients } from "./ingredient-store.js";
 import { loadCalibration } from "./calibration-store.js";
 import {
   loadCategoriesConfig,
@@ -33,12 +40,17 @@ const screens = {
   drinkList,
   detail,
   pouring,
+  queue,
   complete,
   shotPicker,
   shotDetail,
   buildYourOwn,
+  surprise,
   admin,
   notifications,
+  history,
+  drinkStats,
+  ingredientStats,
 };
 
 // Inactivity: any screen except idle (already there) and pouring (don't interrupt
@@ -46,7 +58,7 @@ const screens = {
 // also exempt — an admin walking off mid-edit shouldn't get punted to idle and
 // lose the tab they were on.
 const INACTIVITY_MS = 60_000;
-const NO_TIMEOUT_SCREENS = new Set(["idle", "pouring", "admin", "notifications"]);
+const NO_TIMEOUT_SCREENS = new Set(["idle", "pouring", "admin", "notifications", "history", "drinkStats", "ingredientStats"]);
 
 let currentScreen = null;
 let currentScreenName = null;
@@ -78,7 +90,9 @@ function resetInactivityTimer() {
       // auto-return — otherwise the next person finds it on top of idle.
       dismissAdminPrompt();
       // The next guest shouldn't inherit the previous user's half-built
-      // recipe — wipe the draft alongside the screen reset.
+      // recipe — wipe the draft alongside the screen reset. The drink queue
+      // is shared and server-side: one device going idle must NOT clear it,
+      // so it is deliberately left alone here.
       clearBuildDraft();
       resetStack("idle");
     }
@@ -276,16 +290,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   await Promise.all([
     hydrateDrinks(),
     loadInventory(),
+    loadIngredients(),
     loadCalibration(),
     loadCategoriesConfig(),
   ]);
-  // Every successful pour decrements stock; refresh the cache so drinks that
-  // just went out-of-stock reflect as disabled without needing a screen reload.
-  // A successful pour also retires the build-your-own draft — the just-poured
+  // A successful pour retires the build-your-own draft — the just-poured
   // recipe is "consumed", and the next category-tap should land on an empty
   // editor (complete-screen "Another" reseeds explicitly via setBuildDraft).
+  // Inventory refresh is handled by the INVENTORY_UPDATED broadcast the
+  // server emits from consume().
   on("POUR_COMPLETE", () => {
-    loadInventory();
     clearBuildDraft();
   });
   // `#admin` is the direct entry point for the inventory screen when you
@@ -293,8 +307,31 @@ window.addEventListener("DOMContentLoaded", async () => {
   // The hash route is PIN-gated like the on-screen entries so there's no
   // backdoor — start at idle, then prompt.
   resetStack("idle");
+  // Follow phone-driven pours onto the pouring screen (see followPourFromIdle).
+  onMachineStatus(followPourFromIdle);
   if (location.hash === "#admin") requestAdminAccess();
 });
+
+// A pour the kiosk didn't start (a phone ordered it, or a phone tapped
+// "Pour next") flips the machine to "pouring" with the kiosk sitting on idle.
+// Follow it onto the pouring screen so the screen physically at the machine
+// shows the live pour and, on finish, the complete screen's garnish/top-up
+// reminder — the phone has no complete screen to carry that. Gated to the idle
+// screen on purpose: a kiosk user mid-browse (detail/category/admin) isn't
+// yanked away for someone else's drink. The kiosk's own pours already navigate
+// to "pouring" before this fires (so the guard is a no-op for them), and the
+// queue screen handles its own "Pour next" follow.
+function followPourFromIdle(state) {
+  if (state.status !== "pouring" || currentScreenName !== "idle") return;
+  // Defer so we don't re-enter doTransition from inside a MACHINE_STATE
+  // listener (mounting pouring subscribes another listener mid-broadcast).
+  // Re-check on the microtask — the user may have tapped away meanwhile.
+  queueMicrotask(() => {
+    if (currentScreenName === "idle" && getMachineStatus().status === "pouring") {
+      navigate("pouring");
+    }
+  });
+}
 
 window.addEventListener("hashchange", () => {
   if (location.hash === "#admin" && currentScreenName !== "admin") {
