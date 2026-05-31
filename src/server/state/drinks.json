@@ -4748,7 +4748,8 @@
       "topUp": null,
       "needsIce": true,
       "color": "#E04A6A",
-      "enabled": true
+      "enabled": true,
+      "photo": "assets/drinks/woo-woo.png"
     },
     {
       "id": "hairy-navel",
@@ -4774,7 +4775,8 @@
       "topUp": null,
       "needsIce": true,
       "color": "#F4A040",
-      "enabled": true
+      "enabled": true,
+      "photo": "assets/drinks/hairy-navel.png"
     },
     {
       "id": "hpnotiq-martini",
@@ -4800,7 +4802,8 @@
       "topUp": null,
       "needsIce": false,
       "color": "#5AC8E8",
-      "enabled": true
+      "enabled": true,
+      "photo": "assets/drinks/hpnotiq-martini.png"
     },
     {
       "id": "blue-lagoon-twist",
@@ -4825,7 +4828,8 @@
       },
       "needsIce": true,
       "color": "#4AB8E8",
-      "enabled": true
+      "enabled": true,
+      "photo": "assets/drinks/blue-lagoon-twist.png"
     },
     {
       "id": "mermaid-water",
@@ -4855,7 +4859,8 @@
       "topUp": null,
       "needsIce": true,
       "color": "#5DCAA5",
-      "enabled": true
+      "enabled": true,
+      "photo": "assets/drinks/mermaid-water.png"
     }
   ],
   "updatedAt": "2026-05-27T06:09:29.599Z"

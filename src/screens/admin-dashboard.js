@@ -251,63 +251,127 @@ function inventoryCard(inventory, onTap) {
   return btn;
 }
 
-// Find the single ingredient swap (or load) that would unlock the most
-// blocked recipes. We only count drinks blocked structurally — i.e. an
-// ingredient isn't assigned to any slot — because adding ingredient X can't
-// help a recipe whose problem is just an empty bottle of Y. Returns null
-// when no useful suggestion exists (nothing to unlock, or we'd have to drop
-// an ingredient that other pourable drinks depend on).
-function recipeSuggestion(inventory) {
+// Per-shortfall reasons map to user-facing verbs. 'missing' means no slot
+// holds the ingredient (load or swap); 'empty'/'low' mean a slot exists but
+// doesn't have enough volume for the recipe (refill). Splitting these out
+// lets the suggestion say "Refill lime juice" — usually a 30-second fix —
+// instead of always nudging toward a swap.
+function shortfallsFor(drink, assigned, remainingByIngredient) {
+  const out = [];
+  for (const ing of drink.ingredients) {
+    const remaining = remainingByIngredient.get(ing.name) || 0;
+    if (remaining >= ing.volumeOz) continue;
+    const reason = !assigned.has(ing.name)
+      ? "missing"
+      : remaining <= 0
+        ? "empty"
+        : "low";
+    out.push({ name: ing.name, reason });
+  }
+  return out;
+}
+
+// Compose "...to unlock Margarita, Daiquiri, and 2 more" from the actual
+// drinks a suggestion would make pourable. Names are far more motivating
+// than a bare count — and they let the user sanity-check the suggestion
+// before tapping through to inventory.
+function describeUnlocks(unlockedDrinks) {
+  const names = unlockedDrinks.map((d) => d.name).filter(Boolean);
+  if (names.length === 0) return "more drinks";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  if (names.length === 3) return `${names[0]}, ${names[1]}, and ${names[2]}`;
+  return `${names[0]}, ${names[1]}, and ${names.length - 2} more`;
+}
+
+// Single best action to unlock more recipes — load a new ingredient, refill
+// an empty/low bottle, or swap one slot's contents. Each candidate is
+// weighted by pour history: a candidate that unlocks one favorite beats one
+// that unlocks two never-poured novelties. Returns null when no single
+// action is a clean win (caller falls back to a most-needed list).
+function recipeSuggestion(inventory, stats) {
   const slots = inventory?.slots || [];
   const assigned = new Set(
     slots.filter((s) => s.ingredientId).map((s) => s.ingredientId),
   );
   const unassignedSlotCount = slots.filter((s) => !s.ingredientId).length;
+  const remainingByIngredient = new Map();
+  for (const s of slots) {
+    if (!s.ingredientId) continue;
+    remainingByIngredient.set(
+      s.ingredientId,
+      (remainingByIngredient.get(s.ingredientId) || 0) +
+        (Number(s.remainingOz) || 0),
+    );
+  }
+
+  // +1 baseline so never-poured drinks still register, but a drink poured 10
+  // times outweighs a single novelty. Using id keys because topDrinks groups
+  // by drinkId from pour history.
+  const popularity = new Map(
+    (stats?.topDrinks || []).map((d) => [d.id, d.count || 0]),
+  );
+  const weightOf = (drink) => (popularity.get(drink.id) || 0) + 1;
 
   const blockedDrinks = drinks.filter(
-    (d) =>
-      isVisibleDrink(d) &&
-      d.ingredients.some((i) => !assigned.has(i.name)),
+    (d) => isVisibleDrink(d) && !isDrinkPourable(d),
   );
   if (blockedDrinks.length === 0) return null;
 
-  // Score each unassigned ingredient by how many blocked recipes would
-  // become pourable if we added it — i.e. recipes where it's the *only*
-  // missing ingredient. Adding an ingredient can't unlock a recipe that's
-  // also missing something else.
-  const unlockCount = new Map();
+  // Group by the ingredient that's the *sole* unmet item — fixing one
+  // ingredient can't unlock a recipe missing two things, and we want
+  // suggestions the user can act on in one step.
+  const candidates = new Map();
   for (const d of blockedDrinks) {
-    const missing = d.ingredients.filter((i) => !assigned.has(i.name));
-    if (missing.length === 1) {
-      const id = missing[0].name;
-      unlockCount.set(id, (unlockCount.get(id) || 0) + 1);
+    const sh = shortfallsFor(d, assigned, remainingByIngredient);
+    if (sh.length !== 1) continue;
+    const { name } = sh[0];
+    // The action verb depends only on whether the ingredient is currently
+    // assigned to a slot (refill vs load/swap), not on per-drink empty-vs-low
+    // — so we don't need the shortfall reason here.
+    const entry = candidates.get(name) || {
+      ingredient: name,
+      weight: 0,
+      drinks: [],
+      assigned: assigned.has(name),
+    };
+    entry.weight += weightOf(d);
+    entry.drinks.push(d);
+    candidates.set(name, entry);
+  }
+  if (candidates.size === 0) return null;
+
+  // Sort drinks within each candidate by popularity so describeUnlocks puts
+  // the most-poured drinks first — the suggestion reads as "...to unlock
+  // [your favorites]..." rather than alphabetical order.
+  let best = null;
+  for (const c of candidates.values()) {
+    c.drinks.sort((a, b) => weightOf(b) - weightOf(a));
+    if (
+      !best ||
+      c.weight > best.weight ||
+      (c.weight === best.weight && c.drinks.length > best.drinks.length)
+    ) {
+      best = c;
     }
   }
-  let bestIn = null;
-  let bestCount = 0;
-  for (const [id, count] of unlockCount) {
-    if (count > bestCount) {
-      bestIn = id;
-      bestCount = count;
-    }
+
+  const inName = ingredientName(best.ingredient);
+  const unlocks = describeUnlocks(best.drinks);
+
+  if (best.assigned) {
+    return `Refill ${inName} to unlock ${unlocks}`;
   }
-  if (!bestIn) return null;
-
-  const drinksWord = bestCount === 1 ? "drink" : "drinks";
-  const inName = ingredientName(bestIn);
-
   if (unassignedSlotCount > 0) {
-    return `Load ${inName} to unlock ${bestCount} more ${drinksWord}`;
+    return `Load ${inName} to unlock ${unlocks}`;
   }
 
-  // All slots full — we have to swap something out. Only consider loaded
-  // ingredients that aren't used by any currently-pourable drink, so the
-  // swap doesn't break a recipe we already have. Among those, prefer the
-  // one used in the fewest recipes overall (least valuable to keep).
+  // All slots full — find an ingredient we can drop without breaking a
+  // pourable recipe. Among safe candidates, prefer the one used in the
+  // fewest recipes overall (least valuable to keep).
   const usedByPourable = new Set();
   for (const d of drinks) {
-    if (!isVisibleDrink(d)) continue;
-    if (!isDrinkPourable(d)) continue;
+    if (!isVisibleDrink(d) || !isDrinkPourable(d)) continue;
     for (const i of d.ingredients) usedByPourable.add(i.name);
   }
   const usedByAnyDrink = new Map();
@@ -317,34 +381,35 @@ function recipeSuggestion(inventory) {
       usedByAnyDrink.set(i.name, (usedByAnyDrink.get(i.name) || 0) + 1);
     }
   }
-  const swapCandidates = [...assigned].filter(
-    (id) => !usedByPourable.has(id),
-  );
+  const swapCandidates = [...assigned].filter((id) => !usedByPourable.has(id));
   if (swapCandidates.length === 0) return null;
   swapCandidates.sort(
     (a, b) => (usedByAnyDrink.get(a) || 0) - (usedByAnyDrink.get(b) || 0),
   );
   const outName = ingredientName(swapCandidates[0]);
-
-  return `Swap ${outName} for ${inName} to unlock ${bestCount} more ${drinksWord}`;
+  return `Swap ${outName} for ${inName} to unlock ${unlocks}`;
 }
 
-// Names of every ingredient that's referenced by a blocked recipe but not
-// assigned to any slot, ordered by how many blocked recipes need each one
-// (most-needed first). Used as the recipes-card fallback when no single
-// swap or load is a clean win — we'd rather show the user what's actually
-// needed than a vague "load missing bottles" line.
-function missingBottleNames(inventory) {
+// Ingredients holding back the most blocked recipes, ranked by popularity-
+// weighted demand. Used as the recipes-card fallback when no single action
+// unlocks anything cleanly (every blocked drink needs 2+ ingredients) — we
+// surface the bottles the user would benefit most from sourcing next.
+function missingBottleNames(inventory, stats) {
   const slots = inventory?.slots || [];
   const assigned = new Set(
     slots.filter((s) => s.ingredientId).map((s) => s.ingredientId),
   );
+  const popularity = new Map(
+    (stats?.topDrinks || []).map((d) => [d.id, d.count || 0]),
+  );
+  const weightOf = (drink) => (popularity.get(drink.id) || 0) + 1;
+
   const demand = new Map();
   for (const d of drinks) {
     if (!isVisibleDrink(d)) continue;
     for (const i of d.ingredients) {
       if (!assigned.has(i.name)) {
-        demand.set(i.name, (demand.get(i.name) || 0) + 1);
+        demand.set(i.name, (demand.get(i.name) || 0) + weightOf(d));
       }
     }
   }
@@ -353,7 +418,7 @@ function missingBottleNames(inventory) {
     .map(([id]) => ingredientName(id));
 }
 
-function recipesCard(inventory, onOpenRecipes, onOpenInventory) {
+function recipesCard(inventory, stats, onOpenRecipes, onOpenInventory) {
   const visible = drinks.filter(isVisibleDrink);
   const totalRecipes = visible.length;
   const pourableCount = visible.filter((d) => isDrinkPourable(d)).length;
@@ -403,9 +468,9 @@ function recipesCard(inventory, onOpenRecipes, onOpenInventory) {
     primary.textContent = `${blocked} Locked recipes`;
     text.appendChild(primary);
 
-    let suggestionText = recipeSuggestion(inventory);
+    let suggestionText = recipeSuggestion(inventory, stats);
     if (!suggestionText) {
-      const missing = missingBottleNames(inventory);
+      const missing = missingBottleNames(inventory, stats);
       suggestionText =
         missing.length > 0
           ? `Missing: ${missing.join(", ")}`
@@ -463,13 +528,14 @@ export function adminDashboardView({ setMeta, onSwitchTab }) {
     return row;
   }
 
-  function renderRow2(inventory) {
+  function renderRow2(inventory, stats) {
     const row = document.createElement("div");
     row.className = "dash-row dash-row--shortcuts";
     row.appendChild(inventoryCard(inventory, () => onSwitchTab("inventory")));
     row.appendChild(
       recipesCard(
         inventory,
+        stats,
         () => onSwitchTab("recipes"),
         () => onSwitchTab("inventory"),
       ),
@@ -481,7 +547,7 @@ export function adminDashboardView({ setMeta, onSwitchTab }) {
     element.innerHTML = "";
     element.appendChild(renderStatusStrip(stats, inventory));
     element.appendChild(renderRow1(stats));
-    element.appendChild(renderRow2(inventory));
+    element.appendChild(renderRow2(inventory, stats));
 
     const today = stats.todayPours;
     const total = stats.totalPours;

@@ -13,7 +13,7 @@
     {
       "slot": 3,
       "ingredientId": "whiskey",
-      "remainingOz": 31
+      "remainingOz": 33
     },
     {
       "slot": 4,
@@ -38,7 +38,7 @@
     {
       "slot": 8,
       "ingredientId": "bitters",
-      "remainingOz": 24.9
+      "remainingOz": 25
     },
     {
       "slot": 9,
@@ -81,5 +81,5 @@
       "remainingOz": 25
     }
   ],
-  "updatedAt": "2026-05-27T04:31:44.834Z"
+  "updatedAt": "2026-05-27T17:22:05.471Z"
 }
