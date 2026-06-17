@@ -44,6 +44,19 @@ const HEARTBEAT_MISS_LIMIT = 2;
 let heartbeatTimer = null;
 let heartbeatMisses = 0;
 
+// Listeners notified when the Arduino resets mid-session (READY received
+// while we thought it was already up). The glass watcher subscribes so it
+// can drop its software baseline — the firmware re-tares in setup() on
+// reset, which silently shifts the raw-grams zero the watcher measures
+// against. Registration pattern (not a direct import) keeps the dependency
+// one-way: glass-watch -> serial, no cycle.
+const resetListeners = new Set();
+
+export function onArduinoReset(listener) {
+  resetListeners.add(listener);
+  return () => resetListeners.delete(listener);
+}
+
 function newSeqId() {
   const id = nextSeqId;
   // Wrap before the number gets uncomfortably long in logs. 1M is plenty
@@ -137,6 +150,15 @@ async function connectOnce() {
           const entry = queue.shift();
           clearTimeout(entry.timer);
           entry.reject(new Error("Arduino reset (READY received mid-session)"));
+        }
+        // The firmware just re-tared in setup(); tell anyone holding a
+        // software baseline against the old zero to re-seed.
+        for (const l of resetListeners) {
+          try {
+            l();
+          } catch (e) {
+            console.error("Arduino-reset listener error:", e);
+          }
         }
       }
       ready = true;

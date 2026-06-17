@@ -25,7 +25,7 @@ import { sendCommand, sendRaw } from "./serial.js";
 import { record as recordPour } from "./pour-history.js";
 import { loadCalibration, flowRateForSlot } from "./calibration.js";
 import { readScaleStable } from "./maintenance.js";
-import { getGlassPresent, getEmptyRef } from "./glass-watch.js";
+import { getEmptyRef } from "./glass-watch.js";
 
 const ML_PER_OZ = 29.5735;
 // Flat density covers spirits/juices to within ~5%. Per-ingredient density
@@ -76,29 +76,23 @@ export function serialPour(order, send) {
     ]);
     let cumulativeVolume = 0;
 
-    // Pre-pour glass wait. The ambient watcher (glass-watch.js) keeps
-    // glassPresent up to date during idle, so the common path — user
-    // places glass, then browses, then pours — skips this wait entirely.
+    // Pre-pour glass confirmation. We do NOT trust the ambient watcher's
+    // cached glassPresent flag to gate the pour: a stale-true value (the
+    // watcher latched present off a drifted/desynced emptyRef, or the
+    // glass was removed between browsing and tapping Pour) would let us
+    // dispense into nothing — the exact fail-open we're guarding against.
+    // Instead we always take a fresh STABLE reading and require the
+    // placement delta before any pump runs.
     //
-    // When the user did hit Pour with no glass on the platform, status
-    // has now flipped to "pouring", which pauses the watcher. So we
-    // re-implement its presence check inline here using the watcher's
-    // emptyRef (the same software zero it uses), and break out as soon
-    // as the delta crosses the placement threshold. We do NOT call TARE
-    // — that's the whole point of the new design; the firmware POUR
-    // below will sample its own baseline.
-    if (!cancelled && !getGlassPresent()) {
-      send({
-        type: "POUR_PROGRESS",
-        step: ingredients[0]?.name || "step",
-        stepIndex: 0,
-        totalSteps: ingredients.length,
-        pct: 0,
-        status: "waiting-for-glass",
-      });
-
+    // The common path stays fast: a glass that's genuinely present clears
+    // the threshold on the first read, so we proceed immediately without
+    // ever surfacing the waiting-for-glass UI. Only a first read that
+    // fails to confirm announces the wait and starts polling. We do NOT
+    // call TARE — the firmware POUR below samples its own baseline.
+    if (!cancelled) {
       const GLASS_THRESHOLD_G = 50;
       const waitStart = Date.now();
+      let announcedWait = false;
       while (!cancelled) {
         let overThreshold = false;
         try {
@@ -115,6 +109,20 @@ export function serialPour(order, send) {
           // Ignore transient errors while polling
         }
         if (overThreshold) break;
+        // First read didn't confirm a glass — surface the waiting UI (once)
+        // and keep polling. A cached glassPresent=true gets us here too if
+        // the live reading disagrees, so we fail closed rather than pour.
+        if (!announcedWait) {
+          announcedWait = true;
+          send({
+            type: "POUR_PROGRESS",
+            step: ingredients[0]?.name || "step",
+            stepIndex: 0,
+            totalSteps: ingredients.length,
+            pct: 0,
+            status: "waiting-for-glass",
+          });
+        }
         if (Date.now() - waitStart > GLASS_WAIT_TIMEOUT_MS) {
           // Latch cancelled (same reason as the other error paths below) so a
           // stale cancel() can't fire POUR_CANCELLED on the next pour.

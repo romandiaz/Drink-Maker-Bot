@@ -1,5 +1,6 @@
-// On-screen QWERTY keyboard. Letters only — no numbers or punctuation per the spec.
-// Shift is sticky and visual-only (capitalization doesn't affect search).
+// On-screen QWERTY keyboard. A space bar is always present; numbers and
+// punctuation are opt-in via flags. Shift is a caps-lock toggle: tap to
+// capitalize every letter until tapped again.
 
 const ROWS = [
   ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
@@ -46,6 +47,13 @@ export function keyboard({
     }
   }
 
+  // Emit a letter honoring the caps-lock shift. Shift stays on (caps lock)
+  // until the user taps it again. Non-letter keys (space, digits, punctuation)
+  // are unaffected by shift.
+  function emitLetter(letter) {
+    onLetter?.(shifted ? letter.toUpperCase() : letter);
+  }
+
   // Optional digits row above the letters — admin uses this for WiFi SSIDs
   // and passwords. Search deliberately omits it: drink names don't contain
   // digits and the extra row eats vertical space the result list needs.
@@ -89,7 +97,7 @@ export function keyboard({
       } else {
         btn.dataset.letter = key;
         btn.textContent = key;
-        btn.addEventListener("click", () => onLetter?.(key));
+        btn.addEventListener("click", () => emitLetter(key));
         letterButtons.push(btn);
       }
       r.appendChild(btn);
@@ -97,16 +105,20 @@ export function keyboard({
     wrap.appendChild(r);
   });
 
-  // Extended mode adds a space-bar row with period and apostrophe for editing
-  // drink names and taglines. Search doesn't need this — plain letters only.
-  if (extended) {
+  // Every keyboard gets a space bar — drink names ("Old Fashioned") and SSIDs
+  // need it. Extended mode flanks the space bar with period and apostrophe for
+  // editing drink names and taglines.
+  {
     const r = document.createElement("div");
-    r.className = "keyboard-row keyboard-row--r4";
-    for (const [key, label, cls] of [
-      [".", ".", "keyboard-key--punct"],
-      [" ", "space", "keyboard-key--space"],
-      ["'", "'", "keyboard-key--punct"],
-    ]) {
+    r.className = extended ? "keyboard-row keyboard-row--r4" : "keyboard-row keyboard-row--space";
+    const keys = extended
+      ? [
+          [".", ".", "keyboard-key--punct"],
+          [" ", "space", "keyboard-key--space"],
+          ["'", "'", "keyboard-key--punct"],
+        ]
+      : [[" ", "space", "keyboard-key--space"]];
+    for (const [key, label, cls] of keys) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = `keyboard-key tappable ${cls}`;
@@ -162,9 +174,10 @@ export function keyboard({
     }
     if (/^[a-zA-Z]$/.test(key)) {
       e.preventDefault();
-      // Sticky on-screen shift overrides the physical case; otherwise the
-      // browser already encoded physical-shift state into `key`.
-      onLetter?.(shifted ? key.toUpperCase() : key);
+      // emitLetter applies on-screen shift; the browser already encoded
+      // physical-shift state into `key`, so an already-uppercase key passes
+      // through unchanged.
+      emitLetter(key);
       return;
     }
     if (numbers && /^[0-9]$/.test(key)) {
@@ -172,7 +185,12 @@ export function keyboard({
       onLetter?.(key);
       return;
     }
-    if (extended && (key === " " || key === "." || key === "'")) {
+    if (key === " ") {
+      e.preventDefault();
+      onLetter?.(" ");
+      return;
+    }
+    if (extended && (key === "." || key === "'")) {
       e.preventDefault();
       onLetter?.(key);
     }

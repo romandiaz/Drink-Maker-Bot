@@ -3,7 +3,11 @@ import { shotIngredients, buildShotDrink } from "../drinks.js";
 import { header } from "../components/header.js";
 import { glass } from "../components/glass.js";
 import { ingredientName } from "../ingredients.js";
-import { loadInventory, remainingForIngredient } from "../inventory-store.js";
+import {
+  loadInventory,
+  remainingForIngredient,
+  assignedIngredientIds,
+} from "../inventory-store.js";
 
 // Smallest pour the shot-detail screen will let you commit to. Anything below
 // this is effectively "out" — the tile blocks the tap rather than dropping the
@@ -74,8 +78,19 @@ export function shotPicker() {
   const grid = document.createElement("div");
   grid.className = "shot-grid";
 
+  // Only spirits physically assigned to a pump slot belong in the picker —
+  // there are more shot ingredients than slots, so the rest are never pourable.
+  // Before the first inventory load the assigned set is empty; fall back to the
+  // full list then so the grid doesn't flash blank on boot, the same permissive
+  // cold-boot default the inventory store uses elsewhere.
+  function visibleIngredients() {
+    const assigned = assignedIngredientIds();
+    if (assigned.size === 0) return shotIngredients;
+    return shotIngredients.filter((ing) => assigned.has(ing.id));
+  }
+
   function availableCount() {
-    return shotIngredients.filter((ing) => {
+    return visibleIngredients().filter((ing) => {
       const r = remainingForIngredient(ing.id);
       return !Number.isFinite(r) || r >= MIN_POURABLE_OZ;
     }).length;
@@ -94,7 +109,7 @@ export function shotPicker() {
       })
     );
     grid.innerHTML = "";
-    for (const ing of shotIngredients) grid.appendChild(shotTile(ing));
+    for (const ing of visibleIngredients()) grid.appendChild(shotTile(ing));
   }
 
   element.appendChild(headerSlot);

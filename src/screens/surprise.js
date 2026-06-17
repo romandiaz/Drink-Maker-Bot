@@ -64,6 +64,32 @@ function buildTickRing() {
   return svg;
 }
 
+// Background twinkle layer behind the reel — little white stars that fade in
+// and pulse only while the reel is spinning (toggled via the .is-spinning
+// class). Positions/sizes/timings are randomised once at build time so the
+// field looks scattered rather than gridded; each star's animation-delay is
+// negative so they start mid-cycle and twinkle out of sync.
+const STAR_COUNT = 100;
+function buildStarfield() {
+  const stars = document.createElement("div");
+  stars.className = "surprise-stars";
+  stars.setAttribute("aria-hidden", "true");
+  for (let i = 0; i < STAR_COUNT; i++) {
+    const star = document.createElement("span");
+    star.className = "surprise-star";
+    const size = 1.5 + Math.random() * 1.8; // px
+    const dur = 0.5 + Math.random() * 0.7; // s
+    star.style.left = `${Math.random() * 100}%`;
+    star.style.top = `${Math.random() * 100}%`;
+    star.style.width = `${size}px`;
+    star.style.height = `${size}px`;
+    star.style.animationDuration = `${dur}s`;
+    star.style.animationDelay = `-${Math.random() * dur}s`;
+    stars.appendChild(star);
+  }
+  return stars;
+}
+
 export function surprise() {
   const pool = pourablePool();
 
@@ -71,6 +97,10 @@ export function surprise() {
   element.className = "screen screen--surprise";
   element.dataset.screen = "surprise";
   element.style.setProperty("--cell-h", `${CELL_H}px`);
+
+  // Background twinkle layer sits behind everything (z-index handled in CSS);
+  // appended first so it's the bottom-most painted child.
+  element.appendChild(buildStarfield());
 
   element.appendChild(
     header({ eyebrow: "Bartender's Choice", title: "Surprise Me" })

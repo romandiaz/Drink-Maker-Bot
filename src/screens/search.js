@@ -12,23 +12,44 @@ const MAX_RESULTS = 4;
 function highlightedName(name, query, accent) {
   const wrap = document.createElement("div");
   wrap.className = "search-result__name";
-  if (!query) {
+  const tokens = (query || "").toLowerCase().split(/\s+/).filter(Boolean);
+  if (!tokens.length) {
     wrap.textContent = name;
     return wrap;
   }
   const lower = name.toLowerCase();
-  const i = lower.indexOf(query.toLowerCase());
-  if (i < 0) {
+
+  // Collect every occurrence of every token, then merge overlapping ranges so a
+  // multi-word query ("gin t") highlights each matched word in the name.
+  const ranges = [];
+  for (const t of tokens) {
+    for (let from = lower.indexOf(t); from >= 0; from = lower.indexOf(t, from + t.length)) {
+      ranges.push([from, from + t.length]);
+    }
+  }
+  if (!ranges.length) {
     wrap.textContent = name;
     return wrap;
   }
-  wrap.appendChild(document.createTextNode(name.slice(0, i)));
-  const span = document.createElement("span");
-  span.className = "search-result__match";
-  span.style.setProperty("--accent", accent);
-  span.textContent = name.slice(i, i + query.length);
-  wrap.appendChild(span);
-  wrap.appendChild(document.createTextNode(name.slice(i + query.length)));
+  ranges.sort((a, b) => a[0] - b[0]);
+  const merged = [ranges[0]];
+  for (let k = 1; k < ranges.length; k++) {
+    const last = merged[merged.length - 1];
+    if (ranges[k][0] <= last[1]) last[1] = Math.max(last[1], ranges[k][1]);
+    else merged.push(ranges[k]);
+  }
+
+  let pos = 0;
+  for (const [s, e] of merged) {
+    if (s > pos) wrap.appendChild(document.createTextNode(name.slice(pos, s)));
+    const span = document.createElement("span");
+    span.className = "search-result__match";
+    span.style.setProperty("--accent", accent);
+    span.textContent = name.slice(s, e);
+    wrap.appendChild(span);
+    pos = e;
+  }
+  if (pos < name.length) wrap.appendChild(document.createTextNode(name.slice(pos)));
   return wrap;
 }
 

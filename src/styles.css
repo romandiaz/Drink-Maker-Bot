@@ -2807,6 +2807,12 @@ button.admin-slot__level {
   grid-template-columns: 1fr 4fr 1fr;
   gap: 6px;
 }
+/* Space-only row (base keyboard, e.g. search) */
+.keyboard-row--space {
+  display: grid;
+  grid-template-columns: 1fr;
+  padding: 0 120px;
+}
 .keyboard-key--space { letter-spacing: 0.12em; font-size: 11px; color: var(--text-secondary); text-transform: uppercase; }
 .keyboard-key--punct { font-size: 18px; }
 
@@ -2979,8 +2985,12 @@ button.admin-slot__level {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  grid-auto-rows: 1fr;
+  /* Fixed, tap-comfortable row height instead of 1fr: with ~19 spirits, 1fr
+     squeezed every row to fit the viewport, shrinking tiles below a good touch
+     target and making the grid feel busy. A set height lets the grid scroll. */
+  grid-auto-rows: 84px;
   gap: 10px;
+  align-content: start;
   min-height: 0;
   overflow-y: auto;
   -ms-overflow-style: none;
@@ -4565,6 +4575,53 @@ button.admin-slot__level {
   /* Tighter gap than the default 16 so the reel + tick ring + name + tagline
      + actions all fit in the 436px content height (480 − screen padding). */
   gap: 12px;
+}
+
+/* The interactive content sits above the twinkle layer. The stars layer is
+   positioned (z-index:0), which would otherwise paint over its static
+   siblings — so lift every child to z-index:1, then drop the stars back. */
+.screen--surprise > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Twinkling-star backdrop — full-screen layer behind the reel, faded out until
+   the reel spins. Stars keep their animation paused while hidden so the Pi
+   isn't compositing an invisible field; both fade and twinkle switch on with
+   the .is-spinning class. */
+.surprise-stars {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.surprise-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  /* Soft glow so each point reads as a flash rather than a hard dot. */
+  box-shadow: 0 0 4px 1px rgba(255, 255, 255, 0.7);
+  opacity: 0;
+  animation-name: surprise-twinkle;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-play-state: paused;
+}
+.screen--surprise.is-spinning .surprise-stars {
+  opacity: 1;
+}
+.screen--surprise.is-spinning .surprise-star {
+  animation-play-state: running;
+}
+@keyframes surprise-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.6); }
+  50%      { opacity: 1; transform: scale(1); }
+}
+/* Static screens stay calm under reduced-motion — drop the twinkle entirely. */
+@media (prefers-reduced-motion: reduce) {
+  .surprise-stars { display: none; }
 }
 
 /* Frame occupying a fixed 260×260 footprint in the flex layout — adjacent

@@ -2803,17 +2803,56 @@ export const getDrinkById = (id) => drinks.find((d) => d.id === id);
 
 export const getCategoryById = (id) => categories.find((c) => c.id === id);
 
+// Relevance score for one query token against a drink. Higher wins; 0 = no
+// match. The tiers rank a name hit above any ingredient hit, and a
+// prefix/word-start hit above a mid-string hit, so e.g. "gin" surfaces "Gin and
+// Tonic" ahead of drinks that merely list gin.
+function tokenScore(drink, token, name) {
+  let score = 0;
+  if (name === token) score = 100;
+  else if (name.startsWith(token)) score = 80;
+  else if (new RegExp(`\\b${escapeRegExp(token)}`).test(name)) score = 60;
+  else if (name.includes(token)) score = 40;
+
+  // Best ingredient match adds a smaller weight, so a drink whose name and an
+  // ingredient both match (Gin and Tonic) still edges out a name-only tie.
+  let ingScore = 0;
+  for (const i of drink.ingredients) {
+    const n = i.name.toLowerCase();
+    if (n === token) ingScore = Math.max(ingScore, 20);
+    else if (n.startsWith(token)) ingScore = Math.max(ingScore, 15);
+    else if (n.includes(token)) ingScore = Math.max(ingScore, 10);
+  }
+  return score + ingScore;
+}
+
+// Multi-word queries are AND-matched: every token must hit the name or an
+// ingredient, so "gin t" matches "Gin & Tonic" (gin → name, t → "tonic")
+// even though that exact substring never appears. Total score is the sum.
+function searchScore(drink, tokens) {
+  const name = drink.name.toLowerCase();
+  let total = 0;
+  for (const t of tokens) {
+    const s = tokenScore(drink, t, name);
+    if (s === 0) return 0;
+    total += s;
+  }
+  return total;
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export const searchDrinks = (query) => {
-  const q = query.toLowerCase().trim();
-  if (!q) return [];
-  return drinks.filter((d) => {
-    if (!isVisible(d)) return false;
-    const nameMatch = d.name.toLowerCase().includes(q);
-    const ingredientMatch = d.ingredients.some((i) =>
-      i.name.toLowerCase().includes(q)
-    );
-    return nameMatch || ingredientMatch;
-  });
+  const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length) return [];
+  return drinks
+    .filter(isVisible)
+    .map((d) => ({ d, score: searchScore(d, tokens) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score || a.d.name.localeCompare(b.d.name))
+    .map((x) => x.d);
 };
 
 // Strength shifts the *ratio* of primary spirit to modifiers while keeping the
