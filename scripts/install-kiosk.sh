@@ -199,6 +199,43 @@ else
   echo "    Backend will run in mock mode (no serial port set)"
 fi
 
+# ---------- addressable LED strip (optional) -----------------------------
+#
+# WS2812/SK6812 on GPIO21 (PCM, physical pin 40) is driven straight from the
+# Pi via the rpi-ws281x DMA library. That needs the native binding and the
+# backend running as root (the DMA path uses /dev/mem). GPIO21 uses the PCM
+# peripheral rather than PWM, so the Pi's onboard audio keeps working — no
+# audio changes needed (that's why pin 40 is preferred over GPIO18/pin 12).
+# Enabling LEDs flips the service to run as root — a deliberate trade for this
+# single-purpose appliance. Pass LED_STRIP in the environment (e.g.
+# LED_STRIP=ws2812) to skip the prompt on unattended installs.
+
+echo "==> Addressable LED strip..."
+ENABLE_LEDS=""
+if [[ -n "${LED_STRIP:-}" ]]; then
+  echo "    LED_STRIP preset in environment: $LED_STRIP"
+  ENABLE_LEDS="$LED_STRIP"
+else
+  read -r -p "    Enable WS2812 LED strip on GPIO21 / pin 40 (runs backend as root)? [y/N]: " led_ans
+  [[ "$led_ans" =~ ^[Yy] ]] && ENABLE_LEDS="ws2812"
+fi
+
+LED_ENV_LINE=""
+LED_SERVICE_USER="$KIOSK_USER"
+if [[ -n "$ENABLE_LEDS" ]]; then
+  echo "    Installing rpi-ws281x native binding..."
+  # Deliberately NOT in package.json: it's a Linux/Pi-only native module, so
+  # listing it would break `npm install` on cross-platform dev machines.
+  # --no-save keeps package.json portable; this script is the record that the
+  # binding belongs on the Pi. A build failure is non-fatal — leds.js falls
+  # back to its mock sink, so the kiosk still boots.
+  ( cd "$REPO_DIR" && npm install --no-save rpi-ws281x-v2 ) \
+    || echo "    WARNING: rpi-ws281x-v2 build failed — LEDs will run in mock mode."
+  LED_ENV_LINE="Environment=LED_STRIP=$ENABLE_LEDS"
+  LED_SERVICE_USER="root"
+  echo "    LEDs enabled on GPIO21: service will run as root with LED_STRIP=$ENABLE_LEDS."
+fi
+
 # ---------- systemd service for the backend ------------------------------
 
 echo "==> Installing bartender-kiosk.service..."
@@ -222,7 +259,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=$KIOSK_USER
+User=$LED_SERVICE_USER
 WorkingDirectory=$REPO_DIR
 Environment=NODE_BIN=$NODE_BIN
 ExecStart=/usr/bin/env bash $REPO_DIR/scripts/run-server.sh
@@ -230,6 +267,7 @@ Restart=always
 RestartSec=3
 Environment=NODE_ENV=production
 $SERIAL_ENV_LINE
+$LED_ENV_LINE
 
 [Install]
 WantedBy=multi-user.target

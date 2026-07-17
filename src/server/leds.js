@@ -45,6 +45,7 @@ let pourPct = 0;
 let frame = 0;
 let loopTimer = null;
 let errorTimer = null;
+let selfTestActive = false;
 const pixels = new Array(LED_COUNT).fill(null).map(() => [0, 0, 0]);
 
 export function getLedMode() {
@@ -83,6 +84,33 @@ function tick() {
   frame++;
   renderMode();
   strip.render(pixels);
+}
+
+// Admin bring-up aid: play every animation mode once, then return to idle.
+// It drives the same state machine the pour lifecycle uses, so a clean run on
+// real hardware confirms wiring, power, and the render path end to end. Harmless
+// on the mock sink (it just logs the transitions). Guarded against re-entry.
+export async function runLedSelfTest() {
+  if (selfTestActive) return { ok: false, reason: "already-running" };
+  selfTestActive = true;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  try {
+    setLedMode("waiting");
+    await sleep(1200);
+    for (let p = 0; p <= 1; p += 0.05) {
+      setLedMode("pouring", { pct: p });
+      await sleep(90);
+    }
+    setLedMode("ready");
+    await sleep(2500);
+    setLedMode("error");
+    await sleep(1500);
+    return { ok: true };
+  } finally {
+    // Also clears the error mode's pending auto-revert timer (setLedMode does).
+    setLedMode("idle");
+    selfTestActive = false;
+  }
 }
 
 function renderMode() {
@@ -198,7 +226,9 @@ function mockStrip() {
 // Real WS2812B/SK6812 output via the rpi-ws281x native binding (DMA-driven,
 // so timing is solid even under Chromium load). Requires, on the Pi:
 //   npm install rpi-ws281x-v2
-//   data pin on GPIO18 (PWM0); a level shifter to 5V logic is recommended
+//   data pin on GPIO21 (PCM, physical pin 40) — using the PCM peripheral
+//     instead of PWM leaves the Pi's onboard audio free; a 5V level shifter
+//     is recommended (or try 3.3V direct — see docs/led-wiring.html)
 //   the backend must run as root (or with the right cap) — the binding uses
 //     /dev/mem for DMA. adjust bartender-kiosk.service accordingly.
 // If your binding's API differs, this is the only function to adjust; a throw
@@ -207,7 +237,7 @@ function realStrip() {
   const ws281x = require("rpi-ws281x-v2");
   ws281x.configure({
     leds: LED_COUNT,
-    gpio: Number(process.env.LED_GPIO) || 18,
+    gpio: Number(process.env.LED_GPIO) || 21,
     brightness: Number(process.env.LED_BRIGHTNESS) || 128,
     stripType: "ws2812",
   });

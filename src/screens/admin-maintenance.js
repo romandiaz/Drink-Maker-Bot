@@ -348,6 +348,33 @@ export function adminMaintenanceView({ host, setMeta }) {
     return card;
   }
 
+  function renderLedTest() {
+    const card = document.createElement("section");
+    card.className = "maint-card";
+    card.appendChild(
+      sectionHead("LED strip", "Cycle the light patterns to check wiring")
+    );
+
+    const buttons = document.createElement("div");
+    buttons.className = "maint-quick";
+
+    const test = actionBtn("Test LED strip", { tone: "primary" });
+    test.addEventListener("click", () =>
+      runEndpoint("/api/maintenance/led-test", {}, { successMsg: "LED test complete" })
+    );
+    buttons.appendChild(test);
+
+    card.appendChild(buttons);
+
+    const note = document.createElement("p");
+    note.className = "maint-note";
+    note.textContent =
+      "Runs a ~7-second sequence — waiting pulse, progress bar, celebration, then error — and returns to idle. If the strip stays dark, the backend is in mock mode (check LED_STRIP is set and that it runs as root).";
+    card.appendChild(note);
+
+    return card;
+  }
+
   function render() {
     element.innerHTML = "";
     if (!inventory || !calibration) return;
@@ -355,6 +382,7 @@ export function adminMaintenanceView({ host, setMeta }) {
     element.appendChild(renderQuickActions());
     element.appendChild(renderSlotList());
     element.appendChild(renderReference());
+    element.appendChild(renderLedTest());
     element.appendChild(backup.renderExport());
     element.appendChild(backup.renderSaved());
     updateMeta();

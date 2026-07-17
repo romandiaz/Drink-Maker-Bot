@@ -562,3 +562,41 @@ route table. This is structure only — no endpoint behavior or contract changed
   `jsonRoute`. The admin Maintenance view was split the same way
   (`components/maint-ui.js`, `calibrate-modal.js`, `scale-modals.js`,
   `screens/admin-backup.js`).
+
+## Addressable LED strip
+
+A WS2812B strip on the Pi shows pour progress and a celebration held until the
+finished drink is lifted off. Wiring is documented in
+[led-wiring.html](led-wiring.html).
+
+- **Driven from the Pi, not the Arduino.** The Nano has no free pin — all 16
+  relay channels plus the HX711 consume every usable GPIO (D0/D1 are USB serial,
+  A6/A7 are analog-input-only). So the strip hangs off the Pi's GPIO and
+  `src/server/leds.js` owns it end to end; no firmware or serial-protocol change.
+- **Mock-first, like `mockPour`.** With `LED_STRIP` unset the same animation
+  state machine runs against a no-op sink (laptop dev, or a Pi before the strip
+  is wired). `LED_STRIP=ws2812` switches to the real `rpi-ws281x-v2` binding; if
+  that binding is missing or fails to init, it falls back to the mock sink so the
+  backend still boots — LEDs are non-essential.
+- **`rpi-ws281x-v2` is not in `package.json`.** It's a Linux/Pi-only native
+  module; listing it would break `npm install` on the Windows/Mac dev machine.
+  `install-kiosk.sh` installs it with `--no-save` on the Pi — the script is the
+  record that it belongs there.
+- **Data pin GPIO21 (PCM, pin 40), not GPIO18 (PWM).** Both are valid
+  rpi-ws281x outputs, but PWM (GPIO18) shares the onboard analog-audio block —
+  using it would force disabling audio; PCM (GPIO21) leaves audio alone. GPIO18
+  is kept as a documented alternate (`LED_GPIO=18`). SPI (GPIO10), the only
+  root-free option, was skipped because the SPI method is unreliable on the 3B+
+  (core-clock drift).
+- **The backend runs as root when LEDs are enabled.** The PCM/DMA path needs
+  `/dev/mem`, so `install-kiosk.sh` flips the service `User` to root only when
+  LEDs are turned on. A deliberate trade for a single-purpose appliance;
+  switching to an APA102 (SPI) strip would remove it, changing only
+  `realStrip()` in `leds.js`.
+- **Modes driven off existing signals.** Pour lifecycle → `waiting` / `pouring`
+  (bar tracks `POUR_PROGRESS.pct`) / `ready` / `error`, hooked in the single
+  pour callback in `index.js`; the `ready` celebration holds until glass-watch
+  reports the drink removed (`glassPresent` false). No new sensing.
+- **Bring-up aid: a "Test LED strip" button** in admin Maintenance
+  (`POST /api/maintenance/led-test`) cycles every mode for ~7s under the machine
+  lock, so wiring can be verified without pouring a drink.

@@ -12,6 +12,7 @@ import {
   calibrateScale,
 } from "../maintenance.js";
 import { acquire as acquireMachine } from "../machine-state.js";
+import { runLedSelfTest } from "../leds.js";
 
 // Acquire the machine for `job`, run `fn`, and always release. Sends 409 if the
 // machine is busy, 200 with fn's result on success, 400 on failure. Validate
@@ -103,6 +104,16 @@ export async function maintenanceRoutes(req, res, urlPath) {
     } catch (e) {
       sendJson(res, 400, { error: e.message });
     }
+    return true;
+  }
+
+  if (urlPath === "/api/maintenance/led-test" && req.method === "POST") {
+    // Takes the machine lock like the pump routines: the ~7s sequence drives
+    // the strip through the pour modes, and holding the lock keeps a pour from
+    // starting mid-test and fighting it for the LEDs.
+    await withMachineLock(res, { kind: "maintenance", mode: "led-test" }, () =>
+      runLedSelfTest()
+    );
     return true;
   }
 

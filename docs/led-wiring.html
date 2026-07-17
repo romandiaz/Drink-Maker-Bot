@@ -1,0 +1,606 @@
+<title>WS2812B LED Strip → Raspberry Pi Wiring</title>
+<style>
+  :root {
+    --bg: #eef1f4;
+    --surface: #ffffff;
+    --ink: #16202b;
+    --muted: #5b6b7a;
+    --line: #dde4ea;
+    --accent: #0e8ea3;
+    --callout: #fff8e8;
+    --callout-line: #e7cf95;
+    --callout-ink: #7a5a12;
+
+    /* Schematic board — constant across themes so wire colors read true */
+    --board: #0e1621;
+    --board-2: #0b1119;
+    --board-grid: rgba(255,255,255,0.045);
+    --board-ink: #cdd8e3;
+    --board-faint: #61717f;
+    --pcb-pi: #1f7a4d;
+    --pcb-pi-ink: #eafff2;
+    --chip: #26333f;
+    --chip-ink: #cfe0ee;
+    --pin: #8595a3;
+    --pin-hi: #f5b301;
+
+    /* Wire colors — semantic, fixed */
+    --w-5v: #e5484d;
+    --w-gnd: #8a97a6;
+    --w-33: #9bd66a;
+    --w-5d: #3fb950;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b1017;
+      --surface: #121a24;
+      --ink: #e7edf3;
+      --muted: #8a9bab;
+      --line: #24313d;
+      --accent: #35c2d6;
+      --callout: #1e1a10;
+      --callout-line: #4a3d1c;
+      --callout-ink: #e2c987;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #eef1f4; --surface: #ffffff; --ink: #16202b; --muted: #5b6b7a;
+    --line: #dde4ea; --accent: #0e8ea3;
+    --callout: #fff8e8; --callout-line: #e7cf95; --callout-ink: #7a5a12;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b1017; --surface: #121a24; --ink: #e7edf3; --muted: #8a9bab;
+    --line: #24313d; --accent: #35c2d6;
+    --callout: #1e1a10; --callout-line: #4a3d1c; --callout-ink: #e2c987;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 40px 24px 72px; }
+  .mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", monospace; }
+
+  header { margin-bottom: 28px; }
+  .eyebrow {
+    font: 600 12px/1 ui-monospace, "SF Mono", Consolas, monospace;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 12px;
+  }
+  h1 {
+    font-size: clamp(24px, 4vw, 32px); line-height: 1.15; margin: 0 0 8px;
+    text-wrap: balance; letter-spacing: -0.01em;
+  }
+  .sub { color: var(--muted); font-size: 15px; max-width: 62ch; margin: 0; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; padding: 22px; margin-top: 22px;
+  }
+  h2 {
+    font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 16px; font-weight: 600;
+  }
+  .desc { margin: -8px 0 18px; color: var(--muted); font-size: 14px; }
+  .desc b { color: var(--ink); }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+  .key { display: flex; align-items: center; gap: 9px; font-size: 13.5px; }
+  .swatch { width: 26px; height: 0; border-top-width: 4px; border-top-style: solid; border-radius: 2px; }
+  .key small { color: var(--muted); font-size: 12px; }
+  .conv { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 14px;
+          padding-top: 14px; border-top: 1px solid var(--line);
+          font-size: 12.5px; color: var(--muted); }
+  .conv b { color: var(--ink); font-weight: 600; }
+
+  /* Diagram */
+  .diagram-scroll { overflow-x: auto; border-radius: 12px; }
+  svg.schematic { display: block; width: 100%; min-width: 940px; height: auto;
+                  background: var(--board); border-radius: 12px; }
+  .s-ink { fill: var(--board-ink); }
+  .s-faint { fill: var(--board-faint); }
+  .lbl { font: 600 13px ui-monospace, "SF Mono", Consolas, monospace; }
+  .lbl-sm { font: 500 11.5px ui-monospace, "SF Mono", Consolas, monospace; }
+  .comp-title { font: 700 14px system-ui, sans-serif; }
+
+  .wire { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .w-5v { stroke: var(--w-5v); stroke-width: 3.5; }
+  .w-gnd { stroke: var(--w-gnd); stroke-width: 3.5; }
+  .w-33 { stroke: var(--w-33); stroke-width: 3; stroke-dasharray: 9 7; }
+  .w-5d { stroke: var(--w-5d); stroke-width: 4; }
+  .flow { animation: march 1.1s linear infinite; }
+  @keyframes march { to { stroke-dashoffset: -32; } }
+  @media (prefers-reduced-motion: reduce) { .flow { animation: none; } }
+  .dot { fill: var(--board); stroke-width: 3; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .tbl-scroll { overflow-x: auto; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line);
+           vertical-align: top; }
+  th { font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
+       color: var(--muted); font-weight: 600; }
+  td.mono { font-size: 13px; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  .tag { display: inline-block; width: 12px; height: 12px; border-radius: 3px;
+         vertical-align: -1px; margin-right: 7px; }
+
+  .callout { background: var(--callout); border: 1px solid var(--callout-line);
+             border-radius: 12px; padding: 18px 20px; margin-top: 22px; color: var(--callout-ink); }
+  .callout h2 { color: var(--callout-ink); margin-bottom: 10px; }
+  .callout ul { margin: 0; padding-left: 20px; }
+  .callout li { margin: 6px 0; font-size: 14px; }
+  .callout li b { color: var(--callout-ink); }
+
+  footer { margin-top: 28px; color: var(--muted); font-size: 12.5px; }
+
+  /* Pi header pinout */
+  .pin-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 18px;
+                font-size: 12.5px; color: var(--muted); }
+  .pin-legend span { display: flex; align-items: center; gap: 7px; }
+  .pdot { width: 13px; height: 13px; border-radius: 4px; display: inline-block; }
+  .pin-grid { display: grid; grid-template-columns: 1fr 28px 28px 1fr;
+              row-gap: 5px; column-gap: 10px; align-items: center;
+              max-width: 660px; margin: 0 auto;
+              font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; }
+  .llab { text-align: right; color: var(--muted); }
+  .rlab { text-align: left; color: var(--muted); }
+  .llab b, .rlab b { color: var(--ink); }
+  .pnum { justify-self: center; width: 26px; height: 22px; border-radius: 5px;
+          display: flex; align-items: center; justify-content: center;
+          font-weight: 600; font-size: 12px; }
+  .b-5v { background: var(--w-5v); color: #fff; }
+  .b-gnd { background: var(--w-gnd); color: #0e1621; }
+  .b-33 { background: #8b6fd6; color: #fff; }
+  .b-gpio { background: var(--line); color: var(--muted); }
+  .u { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .ua { outline: 2px dashed var(--accent); outline-offset: 1px; }
+  .ptag { display: inline-block; font-size: 9.5px; text-transform: uppercase;
+          letter-spacing: 0.05em; padding: 1px 6px; border-radius: 999px;
+          background: var(--accent); color: #fff; margin: 0 5px; }
+  .ptag.alt { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+  .pin-note { max-width: 660px; margin: 16px auto 0; font-size: 12.5px;
+              color: var(--muted); text-align: center; }
+
+  /* Why the level shifter */
+  .why-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .why-grid h3 { font-size: 14px; margin: 0 0 8px; color: var(--ink); }
+  .why-grid p { margin: 0 0 10px; font-size: 14px; }
+  @media (max-width: 620px) { .why-grid { grid-template-columns: 1fr; gap: 16px; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Bartender Kiosk · Hardware</div>
+    <h1>WS2812B strip → Raspberry Pi wiring</h1>
+    <p class="sub">A 60-LED addressable strip driven from the Pi's GPIO21 and level-shifted to 5&nbsp;V logic. One 5&nbsp;V supply powers both the strip and the Pi itself (through its GPIO 5&nbsp;V pin). Build from the schematic, then verify against the connection checklist.</p>
+  </header>
+
+  <div class="card">
+    <h2>Wire key</h2>
+    <div class="legend">
+      <div class="key"><span class="swatch" style="border-top-color:var(--w-5v)"></span> +5&nbsp;V power <small>from PSU only</small></div>
+      <div class="key"><span class="swatch" style="border-top-color:var(--w-gnd)"></span> Ground <small>shared by all</small></div>
+      <div class="key"><span class="swatch" style="border-top-color:var(--w-33);border-top-style:dashed"></span> Data · 3.3&nbsp;V <small>Pi output</small></div>
+      <div class="key"><span class="swatch" style="border-top-color:var(--w-5d)"></span> Data · 5&nbsp;V <small>after level shifter</small></div>
+    </div>
+    <div class="conv">
+      <span><b>●</b> Dot = wires joined</span>
+      <span><b>+</b> Plain crossing = <b>not</b> connected</span>
+      <span><b>▸</b> Arrow = signal direction</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Build A · with level shifter <span style="color:var(--accent)">— recommended</span></h2>
+    <p class="desc">The reliable build. The 74AHCT125 converts the Pi's 3.3&nbsp;V into a clean 5&nbsp;V data signal — worth it right next to the pumps and relays.</p>
+    <div class="diagram-scroll">
+      <svg class="schematic" viewBox="0 0 1040 640" role="img" aria-label="Wiring schematic from Raspberry Pi GPIO21 through a 74AHCT125 level shifter and 470 ohm resistor to a WS2812B strip, with a shared 5 volt supply and 1000 microfarad capacitor.">
+        <defs>
+          <marker id="arrow33" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--w-33)"/>
+          </marker>
+          <marker id="arrow5d" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--w-5d)"/>
+          </marker>
+          <pattern id="grid" width="26" height="26" patternUnits="userSpaceOnUse">
+            <path d="M26 0 L0 0 0 26" fill="none" stroke="var(--board-grid)" stroke-width="1"/>
+          </pattern>
+        </defs>
+
+        <rect x="0" y="0" width="1040" height="640" fill="url(#grid)"/>
+
+        <!-- ===== POWER RAILS ===== -->
+        <line x1="190" y1="505" x2="912" y2="505" class="wire w-5v"/>
+        <line x1="190" y1="590" x2="912" y2="590" class="wire w-gnd"/>
+        <text x="924" y="509" class="lbl-sm s-faint">+5V</text>
+        <text x="924" y="594" class="lbl-sm s-faint">GND</text>
+
+        <!-- ===== 5V PSU ===== -->
+        <rect x="42" y="470" width="148" height="140" rx="8" fill="var(--board-2)" stroke="var(--w-gnd)" stroke-width="1.5"/>
+        <text x="116" y="524" text-anchor="middle" class="comp-title s-ink">5&#8202;V / 6&#8202;A</text>
+        <text x="116" y="546" text-anchor="middle" class="lbl-sm s-faint">powers Pi + strip</text>
+        <circle cx="190" cy="505" r="4.5" class="dot" stroke="var(--w-5v)"/>
+        <circle cx="190" cy="590" r="4.5" class="dot" stroke="var(--w-gnd)"/>
+
+        <!-- ===== RASPBERRY PI ===== -->
+        <rect x="60" y="150" width="200" height="180" rx="10" fill="var(--pcb-pi)" stroke="rgba(0,0,0,0.25)" stroke-width="1.5"/>
+        <text x="150" y="178" text-anchor="middle" class="comp-title" fill="var(--pcb-pi-ink)">Raspberry Pi 3B+</text>
+        <!-- header hint -->
+        <g fill="rgba(0,0,0,0.28)">
+          <rect x="238" y="222" width="9" height="9" rx="1.5"/>
+          <rect x="238" y="272" width="9" height="9" rx="1.5"/>
+          <rect x="238" y="315" width="9" height="9" rx="1.5"/>
+        </g>
+        <!-- GPIO21 (pin 40) -->
+        <rect x="238" y="199" width="12" height="12" rx="2" fill="var(--pin-hi)"/>
+        <circle cx="260" cy="205" r="4.5" class="dot" stroke="var(--w-33)"/>
+        <text x="232" y="209" text-anchor="end" class="lbl-sm" fill="var(--pcb-pi-ink)">GPIO21 · pin 40</text>
+        <!-- 5V in (pin 2) -->
+        <rect x="238" y="244" width="12" height="12" rx="2" fill="var(--w-5v)"/>
+        <circle cx="260" cy="250" r="4.5" class="dot" stroke="var(--w-5v)"/>
+        <text x="232" y="254" text-anchor="end" class="lbl-sm" fill="var(--pcb-pi-ink)">5V in · pin 2</text>
+        <!-- GND (pin 6) -->
+        <rect x="238" y="294" width="12" height="12" rx="2" fill="var(--pin)"/>
+        <circle cx="260" cy="300" r="4.5" class="dot" stroke="var(--w-gnd)"/>
+        <text x="232" y="304" text-anchor="end" class="lbl-sm" fill="var(--pcb-pi-ink)">GND · pin 6</text>
+
+        <!-- ===== 74AHCT125 ===== -->
+        <rect x="470" y="150" width="112" height="212" rx="8" fill="var(--chip)" stroke="#0a0f14" stroke-width="1.5"/>
+        <path d="M512 150 A14 14 0 0 0 540 150" fill="none" stroke="var(--board-faint)" stroke-width="2"/>
+        <text x="526" y="262" text-anchor="middle" class="comp-title s-ink">74AHCT125</text>
+        <text x="526" y="282" text-anchor="middle" class="lbl-sm s-faint">level shifter</text>
+
+        <!-- left pins 1..7 -->
+        <!-- pin1 OE -->
+        <line x1="470" y1="175" x2="446" y2="175" stroke="var(--pin-hi)" stroke-width="3"/>
+        <circle cx="446" cy="175" r="3.5" fill="var(--pin-hi)"/>
+        <text x="484" y="179" class="lbl-sm s-ink">1 · 1OE</text>
+        <!-- pin2 1A in -->
+        <line x1="470" y1="205" x2="446" y2="205" stroke="var(--pin-hi)" stroke-width="3"/>
+        <circle cx="446" cy="205" r="3.5" fill="var(--pin-hi)"/>
+        <text x="484" y="209" class="lbl-sm s-ink">2 · 1A ◂ in</text>
+        <!-- pin3 1Y out -->
+        <line x1="470" y1="235" x2="446" y2="235" stroke="var(--pin-hi)" stroke-width="3"/>
+        <circle cx="446" cy="235" r="3.5" fill="var(--pin-hi)"/>
+        <text x="484" y="239" class="lbl-sm s-ink">3 · 1Y ▸ out</text>
+        <!-- faint pins 4,5,6 -->
+        <line x1="470" y1="265" x2="450" y2="265" stroke="var(--pin)" stroke-width="2.5"/>
+        <line x1="470" y1="295" x2="450" y2="295" stroke="var(--pin)" stroke-width="2.5"/>
+        <line x1="470" y1="325" x2="450" y2="325" stroke="var(--pin)" stroke-width="2.5"/>
+        <!-- pin7 GND -->
+        <line x1="470" y1="355" x2="446" y2="355" stroke="var(--w-gnd)" stroke-width="3"/>
+        <circle cx="446" cy="355" r="3.5" fill="var(--w-gnd)"/>
+        <text x="484" y="349" class="lbl-sm s-ink">7 · GND</text>
+
+        <!-- right pins 8..14 -->
+        <line x1="582" y1="355" x2="602" y2="355" stroke="var(--pin)" stroke-width="2.5"/>
+        <line x1="582" y1="325" x2="602" y2="325" stroke="var(--pin)" stroke-width="2.5"/>
+        <line x1="582" y1="295" x2="602" y2="295" stroke="var(--pin)" stroke-width="2.5"/>
+        <line x1="582" y1="265" x2="602" y2="265" stroke="var(--pin)" stroke-width="2.5"/>
+        <line x1="582" y1="235" x2="602" y2="235" stroke="var(--pin)" stroke-width="2.5"/>
+        <line x1="582" y1="205" x2="602" y2="205" stroke="var(--pin)" stroke-width="2.5"/>
+        <!-- pin14 VCC -->
+        <line x1="582" y1="175" x2="606" y2="175" stroke="var(--w-5v)" stroke-width="3"/>
+        <circle cx="606" cy="175" r="3.5" fill="var(--w-5v)"/>
+        <text x="568" y="179" text-anchor="end" class="lbl-sm s-ink">VCC · 14</text>
+
+        <!-- ===== WS2812B STRIP ===== -->
+        <rect x="780" y="150" width="205" height="150" rx="8" fill="var(--board-2)" stroke="var(--w-gnd)" stroke-width="1.5"/>
+        <text x="882" y="180" text-anchor="middle" class="comp-title s-ink">WS2812B</text>
+        <text x="882" y="199" text-anchor="middle" class="lbl-sm s-faint">×60 LEDs</text>
+        <g>
+          <rect x="812" y="215" width="20" height="20" rx="3" fill="#e5484d"/>
+          <rect x="840" y="215" width="20" height="20" rx="3" fill="#3fb950"/>
+          <rect x="868" y="215" width="20" height="20" rx="3" fill="#4c8dff"/>
+          <rect x="896" y="215" width="20" height="20" rx="3" fill="#f5b301"/>
+          <rect x="924" y="215" width="20" height="20" rx="3" fill="#c94fd6"/>
+        </g>
+        <text x="955" y="285" text-anchor="middle" class="lbl-sm s-faint">▸ to rest of strip</text>
+        <!-- pads on left edge -->
+        <line x1="780" y1="185" x2="756" y2="185" stroke="var(--w-5v)" stroke-width="3"/>
+        <circle cx="756" cy="185" r="3.5" fill="var(--w-5v)"/>
+        <text x="794" y="189" class="lbl-sm s-ink">5V</text>
+        <line x1="780" y1="240" x2="756" y2="240" stroke="var(--w-5d)" stroke-width="3"/>
+        <circle cx="756" cy="240" r="3.5" fill="var(--w-5d)"/>
+        <text x="794" y="244" class="lbl-sm s-ink">DIN</text>
+        <line x1="780" y1="270" x2="756" y2="270" stroke="var(--w-gnd)" stroke-width="3"/>
+        <circle cx="756" cy="270" r="3.5" fill="var(--w-gnd)"/>
+        <text x="794" y="274" class="lbl-sm s-ink">GND</text>
+
+        <!-- ===== 1000uF CAP ===== -->
+        <line x1="862" y1="505" x2="862" y2="527" class="wire w-5v"/>
+        <line x1="845" y1="527" x2="879" y2="527" stroke="var(--board-ink)" stroke-width="3"/>
+        <path d="M845 543 Q862 553 879 543" fill="none" stroke="var(--board-ink)" stroke-width="3"/>
+        <line x1="862" y1="547" x2="862" y2="590" class="wire w-gnd"/>
+        <text x="838" y="523" text-anchor="end" class="lbl-sm s-ink">+</text>
+        <text x="888" y="540" class="lbl-sm s-faint">1000µF</text>
+        <circle cx="862" cy="505" r="4.5" class="dot" stroke="var(--w-5v)"/>
+        <circle cx="862" cy="590" r="4.5" class="dot" stroke="var(--w-gnd)"/>
+
+        <!-- ================= WIRES ================= -->
+
+        <!-- 3.3V data: Pi GPIO21 -> chip pin2 (1A) -->
+        <path class="wire w-33 flow" d="M260 205 L446 205" marker-end="url(#arrow33)"/>
+
+        <!-- 5V data out: chip pin3 (1Y) -> over the top -> 470R -> strip DIN -->
+        <path class="wire w-5d" d="M446 235 L430 235 L430 120 L660 120 L660 155"/>
+        <!-- 470 ohm resistor on x=660 -->
+        <polyline class="wire w-5d" points="660,155 650,163 670,171 650,179 670,187 650,195 660,200"/>
+        <path class="wire w-5d flow" d="M660 200 L660 240 L756 240" marker-end="url(#arrow5d)"/>
+        <text x="676" y="180" class="lbl-sm" fill="var(--w-5d)">470Ω</text>
+        <text x="470" y="112" class="lbl-sm" fill="var(--w-5d)">boosted 5V data</text>
+
+        <!-- OE -> GND (enables buffer 1) -->
+        <path class="wire w-gnd" d="M446 175 L420 175 L420 590"/>
+        <text x="414" y="168" text-anchor="end" class="lbl-sm s-faint">1OE→GND</text>
+        <circle cx="420" cy="590" r="4.5" class="dot" stroke="var(--w-gnd)"/>
+
+        <!-- chip VCC (pin14) -> +5V rail -->
+        <path class="wire w-5v" d="M606 175 L690 175 L690 505"/>
+        <circle cx="690" cy="505" r="4.5" class="dot" stroke="var(--w-5v)"/>
+
+        <!-- chip GND (pin7) -> GND rail -->
+        <path class="wire w-gnd" d="M446 355 L400 355 L400 590"/>
+        <circle cx="400" cy="590" r="4.5" class="dot" stroke="var(--w-gnd)"/>
+
+        <!-- Pi GND (pin6) -> GND rail -->
+        <path class="wire w-gnd" d="M260 300 L300 300 L300 590"/>
+        <circle cx="300" cy="590" r="4.5" class="dot" stroke="var(--w-gnd)"/>
+
+        <!-- Pi 5V in (pin2) -> +5V rail -->
+        <path class="wire w-5v" d="M260 250 L330 250 L330 505"/>
+        <circle cx="330" cy="505" r="4.5" class="dot" stroke="var(--w-5v)"/>
+
+        <!-- strip 5V -> +5V rail -->
+        <path class="wire w-5v" d="M756 185 L720 185 L720 505"/>
+        <circle cx="720" cy="505" r="4.5" class="dot" stroke="var(--w-5v)"/>
+
+        <!-- strip GND -> GND rail -->
+        <path class="wire w-gnd" d="M756 270 L740 270 L740 590"/>
+        <circle cx="740" cy="590" r="4.5" class="dot" stroke="var(--w-gnd)"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Build B · direct, no level shifter</h2>
+    <p class="desc">The simplest build. Data runs straight from GPIO21 (pin&nbsp;40) to the strip at 3.3&nbsp;V. <b>Try this first;</b> if the first LEDs flicker or show wrong colors, switch to Build&nbsp;A.</p>
+    <div class="diagram-scroll">
+      <svg class="schematic" viewBox="0 0 1040 640" role="img" aria-label="Direct wiring: Raspberry Pi GPIO21 pin 40 through a 470 ohm resistor straight to the WS2812B strip data-in, with no level shifter, plus a shared 5 volt supply and 1000 microfarad capacitor.">
+        <defs>
+          <marker id="arrow33b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--w-33)"/>
+          </marker>
+          <pattern id="gridb" width="26" height="26" patternUnits="userSpaceOnUse">
+            <path d="M26 0 L0 0 0 26" fill="none" stroke="var(--board-grid)" stroke-width="1"/>
+          </pattern>
+        </defs>
+
+        <rect x="0" y="0" width="1040" height="640" fill="url(#gridb)"/>
+
+        <!-- ===== POWER RAILS ===== -->
+        <line x1="190" y1="505" x2="912" y2="505" class="wire w-5v"/>
+        <line x1="190" y1="590" x2="912" y2="590" class="wire w-gnd"/>
+        <text x="924" y="509" class="lbl-sm s-faint">+5V</text>
+        <text x="924" y="594" class="lbl-sm s-faint">GND</text>
+
+        <!-- ===== 5V PSU ===== -->
+        <rect x="42" y="470" width="148" height="140" rx="8" fill="var(--board-2)" stroke="var(--w-gnd)" stroke-width="1.5"/>
+        <text x="116" y="524" text-anchor="middle" class="comp-title s-ink">5&#8202;V / 6&#8202;A</text>
+        <text x="116" y="546" text-anchor="middle" class="lbl-sm s-faint">powers Pi + strip</text>
+        <circle cx="190" cy="505" r="4.5" class="dot" stroke="var(--w-5v)"/>
+        <circle cx="190" cy="590" r="4.5" class="dot" stroke="var(--w-gnd)"/>
+
+        <!-- ===== RASPBERRY PI ===== -->
+        <rect x="60" y="150" width="200" height="180" rx="10" fill="var(--pcb-pi)" stroke="rgba(0,0,0,0.25)" stroke-width="1.5"/>
+        <text x="150" y="178" text-anchor="middle" class="comp-title" fill="var(--pcb-pi-ink)">Raspberry Pi 3B+</text>
+        <g fill="rgba(0,0,0,0.28)">
+          <rect x="238" y="222" width="9" height="9" rx="1.5"/>
+          <rect x="238" y="272" width="9" height="9" rx="1.5"/>
+          <rect x="238" y="315" width="9" height="9" rx="1.5"/>
+        </g>
+        <rect x="238" y="199" width="12" height="12" rx="2" fill="var(--pin-hi)"/>
+        <circle cx="260" cy="205" r="4.5" class="dot" stroke="var(--w-33)"/>
+        <text x="232" y="209" text-anchor="end" class="lbl-sm" fill="var(--pcb-pi-ink)">GPIO21 · pin 40</text>
+        <rect x="238" y="244" width="12" height="12" rx="2" fill="var(--w-5v)"/>
+        <circle cx="260" cy="250" r="4.5" class="dot" stroke="var(--w-5v)"/>
+        <text x="232" y="254" text-anchor="end" class="lbl-sm" fill="var(--pcb-pi-ink)">5V in · pin 2</text>
+        <rect x="238" y="294" width="12" height="12" rx="2" fill="var(--pin)"/>
+        <circle cx="260" cy="300" r="4.5" class="dot" stroke="var(--w-gnd)"/>
+        <text x="232" y="304" text-anchor="end" class="lbl-sm" fill="var(--pcb-pi-ink)">GND · pin 6</text>
+
+        <!-- ===== WS2812B STRIP ===== -->
+        <rect x="780" y="150" width="205" height="150" rx="8" fill="var(--board-2)" stroke="var(--w-gnd)" stroke-width="1.5"/>
+        <text x="882" y="180" text-anchor="middle" class="comp-title s-ink">WS2812B</text>
+        <text x="882" y="199" text-anchor="middle" class="lbl-sm s-faint">×60 LEDs</text>
+        <g>
+          <rect x="812" y="215" width="20" height="20" rx="3" fill="#e5484d"/>
+          <rect x="840" y="215" width="20" height="20" rx="3" fill="#3fb950"/>
+          <rect x="868" y="215" width="20" height="20" rx="3" fill="#4c8dff"/>
+          <rect x="896" y="215" width="20" height="20" rx="3" fill="#f5b301"/>
+          <rect x="924" y="215" width="20" height="20" rx="3" fill="#c94fd6"/>
+        </g>
+        <text x="955" y="285" text-anchor="middle" class="lbl-sm s-faint">▸ to rest of strip</text>
+        <line x1="780" y1="185" x2="756" y2="185" stroke="var(--w-5v)" stroke-width="3"/>
+        <circle cx="756" cy="185" r="3.5" fill="var(--w-5v)"/>
+        <text x="794" y="189" class="lbl-sm s-ink">5V</text>
+        <line x1="780" y1="240" x2="756" y2="240" stroke="var(--w-33)" stroke-width="3"/>
+        <circle cx="756" cy="240" r="3.5" fill="var(--w-33)"/>
+        <text x="794" y="244" class="lbl-sm s-ink">DIN</text>
+        <line x1="780" y1="270" x2="756" y2="270" stroke="var(--w-gnd)" stroke-width="3"/>
+        <circle cx="756" cy="270" r="3.5" fill="var(--w-gnd)"/>
+        <text x="794" y="274" class="lbl-sm s-ink">GND</text>
+
+        <!-- ===== 1000uF CAP ===== -->
+        <line x1="862" y1="505" x2="862" y2="527" class="wire w-5v"/>
+        <line x1="845" y1="527" x2="879" y2="527" stroke="var(--board-ink)" stroke-width="3"/>
+        <path d="M845 543 Q862 553 879 543" fill="none" stroke="var(--board-ink)" stroke-width="3"/>
+        <line x1="862" y1="547" x2="862" y2="590" class="wire w-gnd"/>
+        <text x="838" y="523" text-anchor="end" class="lbl-sm s-ink">+</text>
+        <text x="888" y="540" class="lbl-sm s-faint">1000µF</text>
+        <circle cx="862" cy="505" r="4.5" class="dot" stroke="var(--w-5v)"/>
+        <circle cx="862" cy="590" r="4.5" class="dot" stroke="var(--w-gnd)"/>
+
+        <!-- ================= WIRES ================= -->
+
+        <!-- Direct 3.3V data: GPIO21 -> 470R -> strip DIN, no shifter -->
+        <text x="360" y="188" text-anchor="middle" class="lbl-sm" fill="var(--w-33)">3.3 V data — no level shifter</text>
+        <path class="wire w-33 flow" d="M260 205 L556 205"/>
+        <polyline class="wire" points="556,205 564,196 580,214 596,196 612,214 620,205" stroke="var(--w-33)" stroke-width="3" style="stroke-dasharray:none"/>
+        <text x="588" y="188" text-anchor="middle" class="lbl-sm" fill="var(--w-33)">470Ω</text>
+        <path class="wire w-33 flow" d="M620 205 L620 240 L756 240" marker-end="url(#arrow33b)"/>
+
+        <!-- Pi 5V in (pin2) -> +5V rail -->
+        <path class="wire w-5v" d="M260 250 L330 250 L330 505"/>
+        <circle cx="330" cy="505" r="4.5" class="dot" stroke="var(--w-5v)"/>
+
+        <!-- Pi GND (pin6) -> GND rail -->
+        <path class="wire w-gnd" d="M260 300 L300 300 L300 590"/>
+        <circle cx="300" cy="590" r="4.5" class="dot" stroke="var(--w-gnd)"/>
+
+        <!-- strip 5V -> +5V rail -->
+        <path class="wire w-5v" d="M756 185 L720 185 L720 505"/>
+        <circle cx="720" cy="505" r="4.5" class="dot" stroke="var(--w-5v)"/>
+
+        <!-- strip GND -> GND rail -->
+        <path class="wire w-gnd" d="M756 270 L740 270 L740 590"/>
+        <circle cx="740" cy="590" r="4.5" class="dot" stroke="var(--w-gnd)"/>
+      </svg>
+    </div>
+    <p class="pin-note">Same as the connection checklist below, minus the three 74AHCT125 rows (VCC, 1OE, and the pin&nbsp;3 output). Keep the 470&nbsp;Ω resistor — it protects the first LED — and keep the data lead short and away from the relay/pump wiring.</p>
+  </div>
+
+  <div class="card">
+    <h2>Raspberry Pi 3B+ · 40-pin header</h2>
+    <div class="pin-legend">
+      <span><i class="pdot b-5v"></i> 5V</span>
+      <span><i class="pdot b-gnd"></i> Ground</span>
+      <span><i class="pdot b-33"></i> 3V3</span>
+      <span><i class="pdot b-gpio"></i> GPIO</span>
+      <span><i class="pdot u" style="background:transparent"></i> used here</span>
+      <span><i class="pdot ua" style="background:transparent"></i> alternate</span>
+    </div>
+    <div class="pin-grid">
+      <div class="llab">3V3</div><div class="pnum b-33">1</div><div class="pnum b-5v u">2</div><div class="rlab"><b>5V</b><span class="ptag">Pi 5V</span></div>
+      <div class="llab">GPIO2 · SDA</div><div class="pnum b-gpio">3</div><div class="pnum b-5v">4</div><div class="rlab">5V</div>
+      <div class="llab">GPIO3 · SCL</div><div class="pnum b-gpio">5</div><div class="pnum b-gnd u">6</div><div class="rlab"><b>GND</b><span class="ptag">ground</span></div>
+      <div class="llab">GPIO4</div><div class="pnum b-gpio">7</div><div class="pnum b-gpio">8</div><div class="rlab">GPIO14 · TXD</div>
+      <div class="llab">GND</div><div class="pnum b-gnd">9</div><div class="pnum b-gpio">10</div><div class="rlab">GPIO15 · RXD</div>
+      <div class="llab">GPIO17</div><div class="pnum b-gpio">11</div><div class="pnum b-gpio ua">12</div><div class="rlab"><b>GPIO18 · PWM0</b><span class="ptag alt">alt data</span></div>
+      <div class="llab">GPIO27</div><div class="pnum b-gpio">13</div><div class="pnum b-gnd">14</div><div class="rlab">GND</div>
+      <div class="llab">GPIO22</div><div class="pnum b-gpio">15</div><div class="pnum b-gpio">16</div><div class="rlab">GPIO23</div>
+      <div class="llab">3V3</div><div class="pnum b-33">17</div><div class="pnum b-gpio">18</div><div class="rlab">GPIO24</div>
+      <div class="llab">GPIO10 · MOSI</div><div class="pnum b-gpio">19</div><div class="pnum b-gnd">20</div><div class="rlab">GND</div>
+      <div class="llab">GPIO9 · MISO</div><div class="pnum b-gpio">21</div><div class="pnum b-gpio">22</div><div class="rlab">GPIO25</div>
+      <div class="llab">GPIO11 · SCLK</div><div class="pnum b-gpio">23</div><div class="pnum b-gpio">24</div><div class="rlab">GPIO8 · CE0</div>
+      <div class="llab">GND</div><div class="pnum b-gnd">25</div><div class="pnum b-gpio">26</div><div class="rlab">GPIO7 · CE1</div>
+      <div class="llab">GPIO0 · ID_SD</div><div class="pnum b-gpio">27</div><div class="pnum b-gpio">28</div><div class="rlab">GPIO1 · ID_SC</div>
+      <div class="llab">GPIO5</div><div class="pnum b-gpio">29</div><div class="pnum b-gnd">30</div><div class="rlab">GND</div>
+      <div class="llab">GPIO6</div><div class="pnum b-gpio">31</div><div class="pnum b-gpio">32</div><div class="rlab">GPIO12 · PWM0</div>
+      <div class="llab">GPIO13 · PWM1</div><div class="pnum b-gpio">33</div><div class="pnum b-gnd">34</div><div class="rlab">GND</div>
+      <div class="llab">GPIO19 · PWM1</div><div class="pnum b-gpio">35</div><div class="pnum b-gpio">36</div><div class="rlab">GPIO16</div>
+      <div class="llab">GPIO26</div><div class="pnum b-gpio">37</div><div class="pnum b-gpio">38</div><div class="rlab">GPIO20 · PCM</div>
+      <div class="llab">GND</div><div class="pnum b-gnd">39</div><div class="pnum b-gpio u">40</div><div class="rlab"><b>GPIO21 · PCM</b><span class="ptag">LED data</span></div>
+    </div>
+    <p class="pin-note">Physical pin numbers, board oriented with the header on the right. This 40-pin layout is identical across Pi 2, 3, 3B+, 4 and 5. This build uses <b>pin 2</b> (5V) · <b>pin 6</b> (GND) · <b>pin 40</b> (GPIO21, data). GPIO21 drives the strip over the PCM peripheral, so the Pi's onboard audio keeps working. GPIO18 / pin 12 is the PWM alternate but conflicts with that audio; pin 4 and the other seven grounds are spare.</p>
+  </div>
+
+  <div class="card">
+    <h2>Why the 74AHCT125 level shifter?</h2>
+    <div class="why-grid">
+      <div>
+        <h3>The signal is out of spec without it</h3>
+        <p>A WS2812 counts its data line as a "1" only above 0.7&nbsp;× the strip voltage — that's <b>3.5&nbsp;V</b> on a 5&nbsp;V strip. The Pi's GPIO only swings <b>3.3&nbsp;V</b>, just under the line. It frequently works anyway, but it's marginal, not guaranteed.</p>
+        <p>The 74AHCT125 runs on 5&nbsp;V, happily reads the Pi's 3.3&nbsp;V as a valid input, and re-drives it as a clean 5&nbsp;V pulse — a solid, in-spec signal into the first LED.</p>
+      </div>
+      <div>
+        <h3>Why it matters on this machine</h3>
+        <p>Your kiosk switches 16 relays and runs pumps inches from this wiring — a lot of electrical noise. A marginal 3.3&nbsp;V data line is exactly what that noise turns into flicker and wrong colors, so here the shifter is cheap insurance rather than optional.</p>
+        <p><b>Don't want the chip?</b> Either sacrifice the first LED — feed 3.3&nbsp;V straight into pixel 1 and don't use it, letting its output re-drive a clean 5&nbsp;V to the rest — or just try 3.3&nbsp;V direct and add the shifter only if the first LEDs misbehave.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Connection checklist</h2>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr><th>Wire</th><th>From</th><th>To</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tag" style="background:var(--w-33)"></span>Data 3.3V</td>
+            <td class="mono">Pi GPIO21 (pin 40)</td>
+            <td class="mono">74AHCT125 pin 2 (1A)</td>
+            <td>The Pi's weak logic-level signal in.</td>
+          </tr>
+          <tr>
+            <td><span class="tag" style="background:var(--w-5d)"></span>Data 5V</td>
+            <td class="mono">74AHCT125 pin 3 (1Y)</td>
+            <td class="mono">470Ω → strip DIN</td>
+            <td>Boosted output. Resistor sits in series next to the strip.</td>
+          </tr>
+          <tr>
+            <td><span class="tag" style="background:var(--w-gnd)"></span>Enable</td>
+            <td class="mono">74AHCT125 pin 1 (1OE)</td>
+            <td class="mono">GND</td>
+            <td>Ties the buffer on. Without it, no output.</td>
+          </tr>
+          <tr>
+            <td><span class="tag" style="background:var(--w-5v)"></span>+5V</td>
+            <td class="mono">PSU +5V</td>
+            <td class="mono">74AHCT125 pin 14 (VCC)</td>
+            <td>Powers the shifter at 5V — that's what makes the boost work.</td>
+          </tr>
+          <tr>
+            <td><span class="tag" style="background:var(--w-5v)"></span>+5V</td>
+            <td class="mono">PSU +5V</td>
+            <td class="mono">strip 5V</td>
+            <td>Strip power — from the PSU, never the Pi.</td>
+          </tr>
+          <tr>
+            <td><span class="tag" style="background:var(--w-5v)"></span>+5V</td>
+            <td class="mono">PSU +5V</td>
+            <td class="mono">1000µF cap (+)</td>
+            <td>Across the strip's power at the injection point.</td>
+          </tr>
+          <tr>
+            <td><span class="tag" style="background:var(--w-5v)"></span>+5V</td>
+            <td class="mono">PSU +5V</td>
+            <td class="mono">Pi 5V (pin 2 or 4)</td>
+            <td>Powers the Pi. Its own +5V/GND pair straight from the PSU — bypasses the Pi's input fuse, so feed clean, correct-polarity 5&nbsp;V and don't also power it over micro-USB.</td>
+          </tr>
+          <tr>
+            <td><span class="tag" style="background:var(--w-gnd)"></span>GND</td>
+            <td class="mono">PSU GND</td>
+            <td class="mono">Pi pin 6 · chip pin 7 · strip GND · cap (−)</td>
+            <td>All grounds tied together on one rail.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="callout">
+    <h2>Powering it safely — what causes 90% of failures</h2>
+    <ul>
+      <li><b>Common ground.</b> PSU, Pi, level shifter, and strip grounds must all connect. A floating ground is the #1 cause of "does nothing" or random flicker.</li>
+      <li><b>Size for the combined load.</b> ~3.6&nbsp;A of LEDs plus ~1.4&nbsp;A for a Pi 3B+ is ≈&nbsp;5&nbsp;A — so a <b>5&nbsp;V / 6&nbsp;A</b> supply for headroom. An undersized supply sags under an LED surge and browns out the Pi (undervoltage → throttling and SD-card corruption).</li>
+      <li><b>Star-wire from the PSU.</b> Run a separate +5V/GND pair to the Pi and another to the strip, straight from the PSU terminals — don't chain the Pi's power off the strip's rail. That keeps a big LED current spike from dipping the Pi's voltage. Use adequately thick wire for both.</li>
+      <li><b>GPIO power bypasses the Pi's protection.</b> Feeding 5&nbsp;V into pin 2 skips the input fuse and reverse-polarity protection. Triple-check polarity (<span class="mono">pin 2 = +5V, pin 6 = GND</span>) — reversed 5&nbsp;V kills the Pi — and power it this way <b>or</b> over micro-USB, never both at once.</li>
+      <li><b>Feed the first LED, not the last.</b> Data goes into the <span class="mono">DIN</span> end. The arrow on the strip shows flow direction — get it backwards and nothing lights.</li>
+    </ul>
+  </div>
+
+  <footer>
+    Data pin is GPIO21 (pin 40) — it uses the PCM peripheral, so the Pi's onboard audio keeps working; GPIO18 (pin 12) is the PWM alternate but conflicts with audio. Try the strip on 3.3&nbsp;V data first — add the 74AHCT125 only if the first LEDs glitch.
+  </footer>
+</div>
