@@ -8,6 +8,7 @@ import { mockPour } from "./pour.js";
 import { serialPour } from "./serialPour.js";
 import { openSerial } from "./serial.js";
 import { startGlassWatcher } from "./glass-watch.js";
+import { initLeds, setLedMode, getLedMode } from "./leds.js";
 import { subscribe as subscribeInventory } from "./inventory.js";
 import * as drinksStore from "./drinks-store.js";
 import * as ingredientsStore from "./ingredients-store.js";
@@ -217,6 +218,18 @@ function startQueuedPour(entry) {
           step: event.step,
           stepIndex: event.stepIndex,
         });
+        // Drive the strip: a soft "waiting" pulse until a glass is confirmed,
+        // then the filling progress bar. pct climbs across all ingredients.
+        if (event.status === "waiting-for-glass") setLedMode("waiting");
+        else setLedMode("pouring", { pct: event.pct });
+      } else if (event.type === "POUR_COMPLETE") {
+        // Celebrate until the finished drink is lifted off — the glass-removal
+        // watcher below returns the strip to idle.
+        setLedMode("ready");
+      } else if (event.type === "POUR_ERROR") {
+        setLedMode("error");
+      } else if (event.type === "POUR_CANCELLED") {
+        setLedMode("idle");
       }
       // Broadcast (not unicast) so whichever device is on the pouring screen —
       // kiosk or phone — follows the pour.
@@ -251,6 +264,13 @@ subscribeMachine((s) => {
   ) {
     queue.setAwaitingContinue(true);
   }
+});
+
+// End the LED celebration once the finished drink is lifted off the platform.
+// glass-watch.js drives glassPresent; here we only care about the ready→idle
+// edge (a new pour's progress events override 'ready' on their own).
+subscribeMachine((s) => {
+  if (getLedMode() === "ready" && !s.glassPresent) setLedMode("idle");
 });
 
 wss.on("connection", (ws, req) => {
@@ -435,6 +455,10 @@ if (process.env.SERIAL_PORT) {
 } else {
   console.log("Mock pour enabled (set SERIAL_PORT to use real hardware)");
 }
+
+// Addressable LED strip. Runs the pour-lifecycle animation state machine.
+// Mock (no-op) sink unless LED_STRIP is set, so this is safe in laptop dev.
+initLeds();
 
 server.listen(PORT, () => {
   console.log(`Bartender kiosk running at http://localhost:${PORT}`);

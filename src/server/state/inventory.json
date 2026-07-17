@@ -3,7 +3,7 @@
     {
       "slot": 1,
       "ingredientId": "gin",
-      "remainingOz": 33
+      "remainingOz": 31
     },
     {
       "slot": 2,
@@ -81,5 +81,5 @@
       "remainingOz": 25
     }
   ],
-  "updatedAt": "2026-05-27T17:22:05.471Z"
+  "updatedAt": "2026-07-17T18:36:28.537Z"
 }
