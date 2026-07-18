@@ -35,8 +35,9 @@ const READY_TIMEOUT_MS = 5000;
 const COMMAND_TIMEOUT_MS = 30_000;
 const RECONNECT_INITIAL_MS = 500;
 const RECONNECT_MAX_MS = 5000;
-// Heartbeat: ping the Arduino while the queue is idle so we notice a
-// hung firmware before the next user pour does. Two consecutive misses
+// Heartbeat: HEALTH-poll the Arduino while the queue is idle so we notice a
+// hung firmware before the next user pour does (and pick up load-cell health
+// as a side effect — see the heartbeat body). Two consecutive misses
 // force-close the port, which trips the reconnect loop.
 const HEARTBEAT_INTERVAL_MS = 2000;
 const HEARTBEAT_TIMEOUT_MS = 1500;
@@ -55,6 +56,40 @@ const resetListeners = new Set();
 export function onArduinoReset(listener) {
   resetListeners.add(listener);
   return () => resetListeners.delete(listener);
+}
+
+// Listeners notified with the firmware's hardware-health report — parsed from
+// the unsolicited boot "STATUS scale=..." line and from every HEALTH heartbeat
+// reply. hardware-health.js subscribes to turn these into machine state and
+// notifications. Same one-way registration pattern as resetListeners: keeps
+// serial.js free of any domain dependency.
+const healthListeners = new Set();
+
+export function onHealthReport(listener) {
+  healthListeners.add(listener);
+  return () => healthListeners.delete(listener);
+}
+
+function notifyHealth(report) {
+  for (const l of healthListeners) {
+    try {
+      l(report);
+    } catch (e) {
+      console.error("health listener error:", e);
+    }
+  }
+}
+
+// Parse "scale=ok" style tokens out of a STATUS/HEALTH body into an object.
+// Unknown tokens are ignored so the firmware can add a subsystem later without
+// breaking an older host.
+function parseHealth(body) {
+  const report = {};
+  for (const tok of body.trim().split(/\s+/)) {
+    const eq = tok.indexOf("=");
+    if (eq > 0) report[tok.slice(0, eq)] = tok.slice(eq + 1);
+  }
+  return report;
 }
 
 function newSeqId() {
@@ -164,6 +199,13 @@ async function connectOnce() {
       ready = true;
       return;
     }
+    // Unsolicited boot health line ("STATUS scale=ok"), emitted right after
+    // READY. No "#<id>" — it's a notification like READY, not a command reply,
+    // so report it and drop it before the ID matching below.
+    if (clean.startsWith("STATUS ")) {
+      notifyHealth(parseHealth(clean.slice("STATUS ".length)));
+      return;
+    }
     // Match the response to its queued command by trailing "#<id>". A line
     // without an ID is a fire-and-forget ack ("OK STOP") or pre-handshake
     // noise — drop it. A line with an ID that isn't in the queue is a late
@@ -250,8 +292,16 @@ function startHeartbeat() {
     // queued command is itself proof the link is alive.
     if (!ready || queue.length > 0) return;
     try {
-      await sendCommand("PING", { timeoutMs: HEARTBEAT_TIMEOUT_MS });
+      // HEALTH doubles as the liveness ping and the scale-health probe: the
+      // firmware replies "HEALTH scale=ok". Because the heartbeat only fires
+      // when the queue is empty, this never collides with an in-flight STABLE
+      // (whose peekStop would otherwise swallow the command). Feed the parsed
+      // report to the same listeners the boot STATUS line uses.
+      const reply = await sendCommand("HEALTH", { timeoutMs: HEARTBEAT_TIMEOUT_MS });
       heartbeatMisses = 0;
+      if (reply.startsWith("HEALTH ")) {
+        notifyHealth(parseHealth(reply.slice("HEALTH ".length)));
+      }
     } catch (err) {
       heartbeatMisses++;
       console.error(

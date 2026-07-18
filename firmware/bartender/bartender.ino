@@ -10,6 +10,7 @@
 // serial-bridge console still works without one.
 //
 //   <- READY                            (boot, no ID)
+//   <- STATUS scale=<ok|fault>          (boot, no ID; unsolicited health)
 //   -> READ                  #<id>  ->  WEIGHT <grams> #<id>
 //   -> TARE                  #<id>  ->  OK TARE #<id>
 //   -> STABLE [<n>] [<tol>]  #<id>  ->  OK STABLE <grams> #<id>
@@ -39,6 +40,10 @@
 //      POUR_TIMEOUT_MS_DEFAULT below — used by the diag sketch and the
 //      manual serial console where no calibration is available.
 //   -> PING                  #<id>  ->  PONG #<id>
+//   -> HEALTH                #<id>  ->  HEALTH scale=<ok|fault> #<id>
+//
+//      Live hardware probe (re-checks the HX711 on demand). The same state
+//      is emitted unsolicited at boot as the "STATUS scale=..." line above.
 //   -> STOP                          ->  OK STOP                  (no-ID, fire-and-forget)
 //                                        ERR aborted #<inflight>  (if a POUR or STABLE was in flight)
 //   bad input                       ->  ERR <reason> [#<id>]
@@ -75,6 +80,11 @@ const bool RELAY_ACTIVE_LOW = true;
 // Loaded from EEPROM on boot if a valid record exists; otherwise raw counts.
 // Set by `CAL <known_grams>` and persisted automatically.
 float scaleFactor = 1.0f;
+
+// Live load-cell health. false when the HX711 isn't responding. Set at boot
+// by the bounded tare, refreshed by every scale access and the HEALTH command,
+// and surfaced to the host via the boot STATUS line and HEALTH replies.
+bool scaleOk = false;
 
 // Bump if the EEPROM layout ever changes — old records will be ignored
 // and the sketch falls back to the default factor until re-calibrated.
@@ -195,6 +205,30 @@ void saveCalibration() {
   EEPROM.put(CAL_EEPROM_ADDR, rec);
 }
 
+// Tare without risking an unbounded block. bogde's tare() -> read_average()
+// spins in read() until DOUT is ready with no timeout, so a cell that goes
+// quiet mid-average would hang until the WDT fires (and could reset-loop on a
+// persistently flaky cell). Here we gate every sample on wait_ready_timeout
+// and give up cleanly, leaving the previous offset untouched. Returns true
+// only if the full average completed.
+bool boundedTare(uint8_t times) {
+  long sum = 0;
+  for (uint8_t i = 0; i < times; i++) {
+    wdt_reset();
+    if (!scale.wait_ready_timeout(SCALE_READ_TIMEOUT_MS)) return false;
+    sum += scale.read();
+  }
+  scale.set_offset(sum / (long)times);
+  return true;
+}
+
+// Emit current scale health as a standalone, no-ID status line — an
+// unsolicited notification like READY, not a reply to a command.
+void reportHealth() {
+  Serial.print("STATUS scale=");
+  Serial.println(scaleOk ? "ok" : "fault");
+}
+
 void setup() {
   // Defensively clear MCUSR and disable the WDT before doing anything else.
   // Older AVR bootloaders left the watchdog armed across resets, which
@@ -214,19 +248,26 @@ void setup() {
   scale.begin(HX711_DT, HX711_SCK);
   loadCalibration();
   scale.set_scale(scaleFactor);
-  // Skip the tare if the HX711 isn't responding — tare() would otherwise
-  // block forever and we haven't armed the WDT yet. Pours will fail with
-  // ERR scale-timeout in that state, which the host surfaces clearly.
-  if (scale.wait_ready_timeout(1000)) {
-    scale.tare();
-  }
 
-  // 4s window: long enough to cover the worst legit blocking call (CAL
-  // averages 20 HX711 samples ≈ 2s at the default 10Hz rate) with margin,
-  // short enough that a real hang recovers fast.
+  // Arm the watchdog BEFORE touching the HX711. The old code tared first, but
+  // bogde's tare() -> read_average() has no timeout: a load cell that passed
+  // the initial ready check and then went quiet mid-average would block here
+  // forever — before READY, with the WDT still disabled. That silent,
+  // un-recoverable hang was the root cause of the intermittent "no READY on
+  // boot". Arming first means the worst case is a clean reset, not a freeze.
+  // 4s window still covers the longest legit blocking call (CAL averages 20
+  // samples ≈ 2s at 10Hz) with margin.
   wdt_enable(WDTO_4S);
 
+  // Bounded, non-blocking tare (see boundedTare). A dead or flaky cell can no
+  // longer freeze boot: we tare if it responds, otherwise boot un-tared and
+  // flag the scale as faulted. Either way we always reach READY.
+  scaleOk = boundedTare(10);
+
   Serial.println("READY");
+  // Announce hardware health right after READY so the host knows on connect
+  // if the load cell is down, instead of discovering it at the first pour.
+  reportHealth();
 }
 
 void loop() {
@@ -249,6 +290,16 @@ void handleCommand(String line) {
   currentId = extractId(line);
 
   if (line.equalsIgnoreCase("READ")) {
+    // Guard the blocking read: a dead HX711 would otherwise make get_units()
+    // spin until the WDT resets the board and drops the command. Fail fast
+    // with a clean error the host can surface, and update the health flag.
+    if (!scale.wait_ready_timeout(SCALE_READ_TIMEOUT_MS)) {
+      scaleOk = false;
+      Serial.print("ERR scale-timeout");
+      printIdSuffix();
+      return;
+    }
+    scaleOk = true;
     float g = scale.get_units(3);
     Serial.print("WEIGHT ");
     Serial.print(g, 2);
@@ -256,13 +307,30 @@ void handleCommand(String line) {
     return;
   }
   if (line.equalsIgnoreCase("TARE")) {
-    scale.tare();
+    // Bounded tare so a non-responsive cell returns an error instead of
+    // blocking until the WDT resets us.
+    if (!boundedTare(10)) {
+      scaleOk = false;
+      Serial.print("ERR scale-timeout");
+      printIdSuffix();
+      return;
+    }
+    scaleOk = true;
     Serial.print("OK TARE");
     printIdSuffix();
     return;
   }
   if (line.equalsIgnoreCase("PING")) {
     Serial.print("PONG");
+    printIdSuffix();
+    return;
+  }
+  if (line.equalsIgnoreCase("HEALTH")) {
+    // Live re-probe so the answer reflects the scale's current state rather
+    // than a stale boot-time flag. Cheap: one readiness poll, no averaging.
+    scaleOk = scale.wait_ready_timeout(SCALE_READ_TIMEOUT_MS);
+    Serial.print("HEALTH scale=");
+    Serial.print(scaleOk ? "ok" : "fault");
     printIdSuffix();
     return;
   }
@@ -345,12 +413,17 @@ void calibrateScale(float knownG) {
   // 20 samples at 10Hz ≈ 2s of blocking — kick the WDT first so we don't
   // race the 4s window.
   wdt_reset();
+  if (!scale.wait_ready_timeout(SCALE_READ_TIMEOUT_MS)) {
+    scaleOk = false;
+    Serial.print("ERR scale-timeout"); printIdSuffix(); return;
+  }
   long raw = scale.get_value(20);
   float factor = (float)raw / knownG;
   if (!isfinite(factor) || factor == 0.0f) { Serial.print("ERR cal-failed"); printIdSuffix(); return; }
   scaleFactor = factor;
   scale.set_scale(scaleFactor);
   saveCalibration();
+  scaleOk = true;
   Serial.print("OK CAL ");
   Serial.print(scaleFactor, 4);
   printIdSuffix();
@@ -393,6 +466,7 @@ void stableRead(uint8_t nSamples, float tolerance) {
     wdt_reset();
     if (peekStop()) { inflightId = ""; return; }
     if (!scale.wait_ready_timeout(SCALE_READ_TIMEOUT_MS)) {
+      scaleOk = false;
       Serial.print("ERR scale-timeout");
       printIdSuffix();
       inflightId = "";
@@ -411,6 +485,7 @@ void stableRead(uint8_t nSamples, float tolerance) {
         sum += buf[i];
       }
       if (hi - lo <= tolerance) {
+        scaleOk = true;
         Serial.print("OK STABLE ");
         Serial.print(sum / nSamples, 2);
         printIdSuffix();
@@ -446,6 +521,7 @@ void pourClosedLoop(uint8_t slot, float targetG, uint32_t timeoutMs) {
   if (scale.wait_ready_timeout(SCALE_READ_TIMEOUT_MS)) {
     wStart = scale.get_units(10);
   } else {
+    scaleOk = false;
     Serial.print("ERR scale-timeout 0.00");
     printIdSuffix();
     inflightId = "";
@@ -471,6 +547,7 @@ void pourClosedLoop(uint8_t slot, float targetG, uint32_t timeoutMs) {
     if (!scale.wait_ready_timeout(SCALE_READ_TIMEOUT_MS)) {
       // Pump is on but we can't measure — stop immediately rather than
       // risk an unbounded overpour while waiting for the WDT to fire.
+      scaleOk = false;
       scaleTimeout = true;
       break;
     }

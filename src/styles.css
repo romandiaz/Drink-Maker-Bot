@@ -21,6 +21,7 @@
 
   /* Status */
   --status-ready: #4ade80;
+  --status-error: #ef4444;
 
   /* Category accents */
   --accent-classics: #d4a574;
@@ -246,6 +247,16 @@ body {
 }
 .ready-indicator--parked .ready-label {
   color: var(--accent-party);
+}
+/* Scale offline — the load cell isn't responding (firmware STATUS/HEALTH,
+   surfaced via machine-state.hardware.scale). Red accent + pulse so even a
+   guest sees the machine can't measure pours right now. */
+.ready-indicator--fault .glass-icon {
+  color: var(--status-error);
+  animation: ready-pulse 1.2s ease-in-out infinite;
+}
+.ready-indicator--fault .ready-label {
+  color: var(--status-error);
 }
 @keyframes ready-pulse {
   0%, 100% { opacity: 1; }

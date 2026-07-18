@@ -8,6 +8,7 @@ import { mockPour } from "./pour.js";
 import { serialPour } from "./serialPour.js";
 import { openSerial } from "./serial.js";
 import { startGlassWatcher } from "./glass-watch.js";
+import { startHardwareHealthMonitor } from "./hardware-health.js";
 import { initLeds, setLedMode, getLedMode } from "./leds.js";
 import { subscribe as subscribeInventory } from "./inventory.js";
 import * as drinksStore from "./drinks-store.js";
@@ -158,6 +159,10 @@ subscribeMachine(() => broadcast(machineStateMessage()));
 subscribeInventory(() => broadcast({ type: "INVENTORY_UPDATED" }));
 subscribeCalibration(() => broadcast({ type: "CALIBRATION_UPDATED" }));
 ingredientsStore.subscribe(() => broadcast({ type: "INGREDIENTS_UPDATED" }));
+
+// Watch firmware hardware-health reports (STATUS on connect + HEALTH heartbeat)
+// and surface a faulted load cell as machine state + an admin notification.
+startHardwareHealthMonitor({ broadcast });
 
 // --- Round queue orchestration --------------------------------------------
 // The server owns the shared drink queue: it pours entries one at a time and

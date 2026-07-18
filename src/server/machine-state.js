@@ -10,9 +10,17 @@
 //     job:    null | { kind, drinkId?, slot?, mode?, startedAt, progress? },
 //     lastOutcome: null | { type: "POUR_COMPLETE" | "POUR_ERROR" | "POUR_CANCELLED", ... },
 //     glassPresent: bool — maintained by glass-watch.js, broadcast here so
-//                          every connected client sees the same value }
+//                          every connected client sees the same value,
+//     hardware: { scale: 'unknown' | 'ok' | 'fault' } — load-cell health,
+//               maintained by hardware-health.js from firmware STATUS/HEALTH }
 
-let state = { status: "idle", job: null, lastOutcome: null, glassPresent: false };
+let state = {
+  status: "idle",
+  job: null,
+  lastOutcome: null,
+  glassPresent: false,
+  hardware: { scale: "unknown" },
+};
 let nextJobId = 1;
 const listeners = new Set();
 
@@ -47,13 +55,20 @@ export function acquire(job) {
     job: ownedJob,
     lastOutcome: null,
     glassPresent: state.glassPresent,
+    hardware: state.hardware,
   };
   emit();
   return function release(outcome = null) {
     // Guard against double-release: only clear if we still own the slot,
     // so a late release after a new acquire doesn't wipe someone else's job.
     if (!state.job || state.job.id !== jobId) return;
-    state = { status: "idle", job: null, lastOutcome: outcome, glassPresent: state.glassPresent };
+    state = {
+      status: "idle",
+      job: null,
+      lastOutcome: outcome,
+      glassPresent: state.glassPresent,
+      hardware: state.hardware,
+    };
     emit();
   };
 }
@@ -73,6 +88,20 @@ export function updateJob(patch) {
 export function setGlassPresent(present) {
   if (state.glassPresent === present) return;
   state = { ...state, glassPresent: present };
+  emit();
+}
+
+// Called by hardware-health.js when the firmware reports a change in a
+// hardware subsystem's health (currently just the load cell). Merged into
+// state.hardware and broadcast on the same channel as everything else, so a
+// client can surface "scale not responding" without a new WS message type.
+// No-op when nothing changed, so the HEALTH heartbeat doesn't spam the WS.
+export function setHardwareHealth(patch) {
+  const next = { ...state.hardware, ...patch };
+  let changed = false;
+  for (const k in next) if (next[k] !== state.hardware[k]) changed = true;
+  if (!changed) return;
+  state = { ...state, hardware: next };
   emit();
 }
 

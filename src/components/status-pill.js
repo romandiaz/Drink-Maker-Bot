@@ -37,9 +37,15 @@ function applyPill(el) {
   const n = q.entries.length;
   const parked = q.awaitingContinue && n > 0;
   const pouring = s.status === "pouring";
+  // Surface a faulted load cell only while the machine is otherwise idle —
+  // during a pour/maintenance the active visual takes precedence, and a pour
+  // with a dead scale surfaces its own error. Optional-chained so the brief
+  // pre-first-message default state (no hardware field) reads as no fault.
+  const showFault = s.hardware?.scale === "fault" && s.status === "idle";
   el.classList.toggle("ready-indicator--busy", s.status !== "idle");
   el.classList.toggle("ready-indicator--pouring", pouring);
   el.classList.toggle("ready-indicator--parked", parked);
+  el.classList.toggle("ready-indicator--fault", showFault);
   // Glass-presence is the inner dot of the same icon — fills when glass-watch
   // has detected a glass on the platform.
   el.classList.toggle("ready-indicator--glass", !!s.glassPresent);
@@ -56,8 +62,11 @@ function applyPill(el) {
     let word = "Ready";
     if (pouring) word = "Pouring";
     else if (s.status === "maintenance") word = "Maintenance";
+    else if (showFault) word = "Scale offline";
     else if (parked) word = "Paused";
-    label.textContent = n > 0 ? `${word} · ${n}` : word;
+    // The fault label stands alone — appending a queue count ("Scale offline ·
+    // 2") reads as nonsense; every other state keeps the count suffix.
+    label.textContent = showFault ? word : n > 0 ? `${word} · ${n}` : word;
   }
 }
 
