@@ -1,10 +1,11 @@
 // Addressable RGB strip driver. Renders the machine's pour lifecycle onto a
 // WS2812B strip wired to the Raspberry Pi's GPIO:
 //
-//   idle     slow amber breathing (attract)
-//   waiting  soft blue pulse while we wait for a glass on the platform
+//   idle     subtle amber breathing — empty platform (attract)
+//   glass    steady bright amber — a glass is on the platform, ready to pour
+//   waiting  soft blue pulse while a pour waits for a glass to be placed
 //   pouring  a green progress bar that fills to the pour's pct
-//   ready    rainbow celebration, HELD until the finished drink is lifted off
+//   ready    glittery random flashing — done, HELD until the drink is lifted off
 //   error    red pulse (auto-clears back to idle after ERROR_HOLD_MS)
 //
 // Mock-first, mirroring pour.js/mockPour: with LED_STRIP unset (laptop dev, or
@@ -18,9 +19,9 @@
 // consume every usable GPIO), so the strip is driven from the Pi directly. This
 // module owns it end to end; nothing in the firmware or serial protocol changes.
 
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 const LED_COUNT = process.env.LED_COUNT ? Number(process.env.LED_COUNT) : 60;
 // ~30fps: smooth enough for a progress bar and breathing, cheap enough to run
@@ -29,15 +30,21 @@ const FRAME_MS = 33;
 // An error pulse with no follow-up event (e.g. a pour that failed and left the
 // queue empty) shouldn't glow red forever — revert to idle on its own.
 const ERROR_HOLD_MS = 8000;
+// The physical strip is driven by a small Python helper (rpi_ws281x) that this
+// module spawns and streams frames to — see realStrip() and led-helper.py.
+const HELPER = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "scripts", "led-helper.py");
 
 // Palette. LEDs aren't bound by the UI's "flat, no gradients" rule — that's a
 // screen-design constraint. Values loosely track the CSS design tokens so the
 // physical light and the on-screen accent read as the same machine.
 const AMBER = [212, 165, 116]; // --accent-classics
 const BLUE = [80, 140, 255];
-const GREEN = [74, 222, 128]; // --status-ready
+const GREEN = [20, 235, 45]; // punchy green; the UI's mint --status-ready reads washed-out on the strip
 const BAR_BG = [6, 20, 12]; // dim rail behind the progress fill
 const RED = [239, 68, 68];
+// Steady brightness the strip brightens to when a glass sits on the platform —
+// well above the idle breathing peak so the "glass detected" jump is obvious.
+const GLASS_BRIGHTNESS = 0.7;
 
 let strip = null;
 let mode = "idle";
@@ -47,6 +54,10 @@ let loopTimer = null;
 let errorTimer = null;
 let selfTestActive = false;
 const pixels = new Array(LED_COUNT).fill(null).map(() => [0, 0, 0]);
+// Per-pixel glitter state for the "ready" celebration: each pixel holds a
+// brightness that decays every frame and is re-ignited at random to full white,
+// so the strip twinkles like glitter.
+const sparkleLevel = new Float32Array(LED_COUNT);
 
 export function getLedMode() {
   return mode;
@@ -95,6 +106,8 @@ export async function runLedSelfTest() {
   selfTestActive = true;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   try {
+    setLedMode("glass");
+    await sleep(1500);
     setLedMode("waiting");
     await sleep(1200);
     for (let p = 0; p <= 1; p += 0.05) {
@@ -115,6 +128,8 @@ export async function runLedSelfTest() {
 
 function renderMode() {
   switch (mode) {
+    case "glass":
+      return renderGlass();
     case "pouring":
       return renderPouring();
     case "waiting":
@@ -129,9 +144,17 @@ function renderMode() {
 }
 
 function renderIdle() {
-  // Gentle breathing between 15% and 30% brightness — present but not loud.
-  const b = 0.15 + 0.15 * wave(0.05);
+  // A deep, dramatic breath on an empty platform — swings from nearly off up to
+  // a strong glow and back. Still peaks below the steady glass-present level, so
+  // placing a glass reads as "settling to a bright hold".
+  const b = 0.04 + 0.46 * wave(0.04);
   fill(scale(AMBER, b));
+}
+
+function renderGlass() {
+  // A glass is on the platform: brighten from the breathing idle to a steady,
+  // fuller amber so it reads as "noticed you — ready to pour".
+  fill(scale(AMBER, GLASS_BRIGHTNESS));
 }
 
 function renderWaiting() {
@@ -154,10 +177,14 @@ function renderPouring() {
 }
 
 function renderReady() {
-  // Rainbow that drifts along the strip — unmistakably "done, take your drink".
+  // Glittery white flashing — the drink is done. Every frame each pixel dims,
+  // and a few random pixels re-ignite to full white, so the strip twinkles like
+  // glitter. Held until the finished drink is lifted off.
+  for (let i = 0; i < LED_COUNT; i++) sparkleLevel[i] *= 0.82;
+  for (let n = 0; n < 3; n++) sparkleLevel[(Math.random() * LED_COUNT) | 0] = 1;
   for (let i = 0; i < LED_COUNT; i++) {
-    const hue = (i / LED_COUNT + frame * 0.01) % 1;
-    pixels[i] = hsv(hue, 0.9, 1);
+    const v = Math.round(sparkleLevel[i] * 255);
+    pixels[i] = [v, v, v];
   }
 }
 
@@ -185,24 +212,6 @@ function fill(rgb) {
   for (let i = 0; i < LED_COUNT; i++) pixels[i] = rgb;
 }
 
-function hsv(h, s, v) {
-  const i = Math.floor(h * 6);
-  const f = h * 6 - i;
-  const p = v * (1 - s);
-  const q = v * (1 - f * s);
-  const t = v * (1 - (1 - f) * s);
-  let r, g, b;
-  switch (i % 6) {
-    case 0: [r, g, b] = [v, t, p]; break;
-    case 1: [r, g, b] = [q, v, p]; break;
-    case 2: [r, g, b] = [p, v, t]; break;
-    case 3: [r, g, b] = [p, q, v]; break;
-    case 4: [r, g, b] = [t, p, v]; break;
-    default: [r, g, b] = [v, p, q];
-  }
-  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
-}
-
 // --- render targets --------------------------------------------------------
 
 function createStrip() {
@@ -223,32 +232,66 @@ function mockStrip() {
   return { render() {} };
 }
 
-// Real WS2812B/SK6812 output via the rpi-ws281x native binding (DMA-driven,
-// so timing is solid even under Chromium load). Requires, on the Pi:
-//   npm install rpi-ws281x-v2
-//   data pin on GPIO21 (PCM, physical pin 40) — using the PCM peripheral
-//     instead of PWM leaves the Pi's onboard audio free; a 5V level shifter
-//     is recommended (or try 3.3V direct — see docs/led-wiring.html)
-//   the backend must run as root (or with the right cap) — the binding uses
-//     /dev/mem for DMA. adjust bartender-kiosk.service accordingly.
-// If your binding's API differs, this is the only function to adjust; a throw
-// here just drops us back to the mock sink.
+// Real WS2812B/SK6812 output. The Node-native bindings for this chip are
+// unmaintained and no longer compile against modern Node/V8, so we drive the
+// strip through a small Python helper (led-helper.py) built on the maintained
+// rpi_ws281x library. This module stays the single source of animation:
+// realStrip() spawns the helper once and streams it one frame per line
+// (LED_COUNT hex RRGGBB triplets); the helper is a dumb sink.
+//
+// The backend runs as root on the Pi (rpi_ws281x needs /dev/mem for DMA), so
+// the child inherits root. Data pin defaults to GPIO21 (PCM, physical pin 40),
+// which leaves the Pi's onboard audio free; override with LED_GPIO. If the
+// helper can't start (Python or the lib missing), it exits and we simply stop
+// pushing pixels — the rest of the kiosk is unaffected. Set LED_PYTHON to point
+// at a specific interpreter (e.g. a venv) if the default python3 lacks the lib.
 function realStrip() {
-  const ws281x = require("rpi-ws281x-v2");
-  ws281x.configure({
-    leds: LED_COUNT,
-    gpio: Number(process.env.LED_GPIO) || 21,
-    brightness: Number(process.env.LED_BRIGHTNESS) || 128,
-    stripType: "ws2812",
+  const python = process.env.LED_PYTHON || "python3";
+  const gpio = Number(process.env.LED_GPIO) || 21;
+  const brightness = Number(process.env.LED_BRIGHTNESS) || 128;
+  const child = spawn(python, [HELPER], {
+    stdio: ["pipe", "inherit", "inherit"],
+    env: {
+      ...process.env,
+      LED_COUNT: String(LED_COUNT),
+      LED_GPIO: String(gpio),
+      LED_BRIGHTNESS: String(brightness),
+    },
   });
-  const buf = new Uint32Array(LED_COUNT);
+
+  let alive = true;
+  child.on("error", (err) => {
+    alive = false;
+    console.error(`[leds] helper failed to start (${err.message}); LEDs off`);
+  });
+  child.on("exit", (code) => {
+    alive = false;
+    console.error(`[leds] helper exited (code ${code}); LEDs off`);
+  });
+  // A backpressured/broken pipe must not crash the backend with EPIPE.
+  child.stdin.on("error", () => {});
+  // Don't leave an orphaned helper holding the strip when the backend exits
+  // (the in-app restart button exits node cleanly, then run-server.sh respawns
+  // it — without this, two helpers would fight the same GPIO).
+  const cleanup = () => {
+    try {
+      child.kill();
+    } catch {}
+  };
+  process.once("exit", cleanup);
+  process.once("SIGINT", () => { cleanup(); process.exit(130); });
+  process.once("SIGTERM", () => { cleanup(); process.exit(143); });
+
   return {
     render(px) {
+      if (!alive) return;
+      let line = "";
       for (let i = 0; i < LED_COUNT; i++) {
         const [r, g, b] = px[i];
-        buf[i] = (r << 16) | (g << 8) | b;
+        line += ((r << 16) | (g << 8) | b).toString(16).padStart(6, "0");
+        if (i < LED_COUNT - 1) line += " ";
       }
-      ws281x.render(buf);
+      child.stdin.write(line + "\n");
     },
   };
 }

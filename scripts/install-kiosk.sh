@@ -223,14 +223,18 @@ fi
 LED_ENV_LINE=""
 LED_SERVICE_USER="$KIOSK_USER"
 if [[ -n "$ENABLE_LEDS" ]]; then
-  echo "    Installing rpi-ws281x native binding..."
-  # Deliberately NOT in package.json: it's a Linux/Pi-only native module, so
-  # listing it would break `npm install` on cross-platform dev machines.
-  # --no-save keeps package.json portable; this script is the record that the
-  # binding belongs on the Pi. A build failure is non-fatal — leds.js falls
-  # back to its mock sink, so the kiosk still boots.
-  ( cd "$REPO_DIR" && npm install --no-save rpi-ws281x-v2 ) \
-    || echo "    WARNING: rpi-ws281x-v2 build failed — LEDs will run in mock mode."
+  echo "    Installing the rpi_ws281x Python driver..."
+  # The strip is driven by scripts/led-helper.py (rpi_ws281x). The Node-native
+  # WS2812 bindings are unmaintained and don't compile against current Node, so
+  # we use the maintained Python library instead. Installed with
+  # --break-system-packages so it's importable by the root-run backend's system
+  # python3 (Bookworm marks the environment externally-managed). python3-dev +
+  # build tools cover the C-extension compile. Non-fatal — leds.js just stops
+  # pushing pixels if the helper can't import it.
+  sudo apt-get install -y python3-dev python3-pip build-essential
+  sudo pip3 install --break-system-packages rpi_ws281x \
+    || echo "    WARNING: rpi_ws281x install failed — LEDs stay dark until fixed."
+  chmod +x "$REPO_DIR/scripts/led-helper.py"
   LED_ENV_LINE="Environment=LED_STRIP=$ENABLE_LEDS"
   LED_SERVICE_USER="root"
   echo "    LEDs enabled on GPIO21: service will run as root with LED_STRIP=$ENABLE_LEDS."

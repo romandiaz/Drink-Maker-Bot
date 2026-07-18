@@ -578,10 +578,15 @@ finished drink is lifted off. Wiring is documented in
   is wired). `LED_STRIP=ws2812` switches to the real `rpi-ws281x-v2` binding; if
   that binding is missing or fails to init, it falls back to the mock sink so the
   backend still boots — LEDs are non-essential.
-- **`rpi-ws281x-v2` is not in `package.json`.** It's a Linux/Pi-only native
-  module; listing it would break `npm install` on the Windows/Mac dev machine.
-  `install-kiosk.sh` installs it with `--no-save` on the Pi — the script is the
-  record that it belongs there.
+- **The strip is driven by a Python helper, not a Node binding.** The
+  Node-native WS2812 bindings are unmaintained and fail to compile against
+  modern Node/V8 (they call removed APIs — `v8::Object::Get`,
+  `ArrayBuffer::GetContents`). `scripts/led-helper.py` uses the maintained
+  `rpi_ws281x` Python library; `leds.js` spawns it once and streams one frame
+  per line (LED_COUNT hex triplets). Animation stays in JS — the helper is a
+  dumb sink. `install-kiosk.sh` installs the lib via `pip3
+  --break-system-packages` (Bookworm is externally-managed), so nothing lands
+  in `package.json` to break cross-platform `npm install`.
 - **Data pin GPIO21 (PCM, pin 40), not GPIO18 (PWM).** Both are valid
   rpi-ws281x outputs, but PWM (GPIO18) shares the onboard analog-audio block —
   using it would force disabling audio; PCM (GPIO21) leaves audio alone. GPIO18

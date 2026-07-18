@@ -271,11 +271,21 @@ subscribeMachine((s) => {
   }
 });
 
-// End the LED celebration once the finished drink is lifted off the platform.
-// glass-watch.js drives glassPresent; here we only care about the ready→idle
-// edge (a new pour's progress events override 'ready' on their own).
+// Resting-state LEDs track the glass. When the machine is idle and not mid-
+// celebration, the strip breathes on an empty platform and brightens to a
+// steady glow once a glass is placed. The done glitter holds until the finished
+// drink is lifted off. glass-watch.js drives glassPresent; pour/waiting/error
+// own the strip while active, so those modes are left alone.
 subscribeMachine((s) => {
-  if (getLedMode() === "ready" && !s.glassPresent) setLedMode("idle");
+  const m = getLedMode();
+  if (m === "ready") {
+    // Done celebration: end it only when the finished drink is removed.
+    if (!s.glassPresent) setLedMode("idle");
+    return;
+  }
+  if (m === "pouring" || m === "waiting" || m === "error") return;
+  if (s.status !== "idle") return;
+  setLedMode(s.glassPresent ? "glass" : "idle");
 });
 
 wss.on("connection", (ws, req) => {
