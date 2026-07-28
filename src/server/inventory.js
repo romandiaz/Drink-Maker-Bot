@@ -166,9 +166,33 @@ export async function reloadFromDisk() {
   emit();
 }
 
+// A measured value this far above what the recipe asked for is treated as a
+// bad scale reading rather than a real overpour, and the recipe volume is used
+// instead. The firmware stops the pump at (target - overshoot guard), so a
+// healthy pour always lands just about at target — this only ever fires when
+// something leaned on the platform mid-pour. Bounds the damage a single bad
+// reading can do to a bottle level without discarding honest small variance.
+const MAX_MEASURED_RATIO = 2;
+
+// Volume to actually deduct for one ingredient. `actualOz` is what the load
+// cell measured; it's absent on the mock path and on any pour the scale
+// couldn't measure, in which case we fall back to the recipe volume.
+function deductionOz(ing) {
+  const measured = Number(ing.actualOz);
+  if (!Number.isFinite(measured) || measured < 0) return ing.volumeOz;
+  if (measured > ing.volumeOz * MAX_MEASURED_RATIO) return ing.volumeOz;
+  return measured;
+}
+
 // Deduct `ingredients` from the first matching slot for each ID. Slots with
-// insufficient volume are clamped to zero rather than erroring — the mock
-// pour has already "happened" by the time this is called.
+// insufficient volume are clamped to zero rather than erroring — the pour has
+// already physically happened by the time this is called.
+//
+// Each entry may carry an `actualOz` measured by the load cell (serialPour
+// sets it from the firmware's "DONE <grams>"). Deducting what was really
+// poured rather than what the recipe asked for makes bottle levels
+// self-correcting: per-pour error stops accumulating, so a level that starts
+// accurate stays accurate across a whole bottle instead of drifting.
 export async function consume(ingredients) {
   const inv = await loadInventory();
   for (const ing of ingredients) {
@@ -176,9 +200,25 @@ export async function consume(ingredients) {
       (s) => s.ingredientId === ing.name && s.remainingOz > 0
     );
     if (!slot) continue;
-    const next = Math.max(0, slot.remainingOz - ing.volumeOz);
+    const next = Math.max(0, slot.remainingOz - deductionOz(ing));
     slot.remainingOz = Number(next.toFixed(2));
   }
+  inv.updatedAt = new Date().toISOString();
+  await persist(inv);
+  emit();
+  return inv;
+}
+
+// Zero a slot's remaining volume. Called when the firmware reports no-flow —
+// the pump ran but the weight never moved, so whatever the bookkeeping said,
+// this bottle can't deliver. Writing 0 is what takes the slot out of service:
+// the UI shows it empty and drinks needing it are blocked, instead of every
+// guest in turn rediscovering the same dead bottle.
+export async function markSlotEmpty(slot) {
+  const inv = await loadInventory();
+  const row = inv.slots.find((s) => s.slot === slot);
+  if (!row || row.remainingOz === 0) return inv;
+  row.remainingOz = 0;
   inv.updatedAt = new Date().toISOString();
   await persist(inv);
   emit();

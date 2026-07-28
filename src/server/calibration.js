@@ -121,6 +121,60 @@ export async function setSlotRate(slot, ozPerSec) {
   return cache;
 }
 
+// Weight given to a single pour's measurement when folding it into a slot's
+// stored rate. Low on purpose: one observation nudges the rate rather than
+// replacing it, so a slightly-off pour can't swing the estimate, but a genuine
+// change (new tubing, thicker syrup, a pump wearing in) still converges within
+// a handful of pours. A slot with no stored rate takes its first observation
+// whole — there's nothing to average against, and the seeded default is a
+// guess we'd rather replace immediately than creep away from.
+const LEARN_ALPHA = 0.2;
+// Reject an observation this far from the stored rate as a bad measurement
+// rather than a real change. A pump doesn't triple in speed between drinks;
+// a reading that says so came from a bumped platform or a mid-pour top-up.
+// Real drift is gradual and well inside this band, so it still gets learned.
+const MAX_OBSERVATION_RATIO = 3;
+
+// Fold one pour's measured flow rate into a slot's stored calibration.
+//
+// This is what lets ordinary pours replace the manual calibration routine:
+// every closed-loop pour already weighs what it dispensed and knows how long
+// the pump ran, so the rate can be refined continuously instead of only when
+// someone remembers to run the wizard. Manual calibration still works and is
+// still the right tool for a brand-new slot — it sets the rate outright, and
+// subsequent pours refine from there.
+//
+// Returns the calibration document; unchanged if the observation was rejected.
+export async function observeSlotRate(slot, observedOzPerSec) {
+  const observed = Number(observedOzPerSec);
+  if (!Number.isInteger(slot) || slot < 1) return loadCalibration();
+  if (!Number.isFinite(observed) || observed <= 0) return loadCalibration();
+
+  const cal = await loadCalibration();
+  const stored = cal.flowRateBySlot?.[slot];
+  const hasStored = Number.isFinite(stored);
+
+  if (hasStored) {
+    const ratio = observed / stored;
+    if (ratio > MAX_OBSERVATION_RATIO || ratio < 1 / MAX_OBSERVATION_RATIO) {
+      console.log(
+        `[calibration] slot ${slot}: ignoring ${observed.toFixed(3)} oz/s ` +
+          `(stored ${stored.toFixed(3)}, outside ${MAX_OBSERVATION_RATIO}x band)`
+      );
+      return cal;
+    }
+  }
+
+  const next = hasStored
+    ? stored + (observed - stored) * LEARN_ALPHA
+    : observed;
+  console.log(
+    `[calibration] slot ${slot}: ${hasStored ? stored.toFixed(3) : "unset"} -> ` +
+      `${next.toFixed(3)} oz/s (measured ${observed.toFixed(3)})`
+  );
+  return setSlotRate(slot, next);
+}
+
 export async function clearSlotRate(slot) {
   const cal = await loadCalibration();
   if (!(slot in cal.flowRateBySlot)) return cal;

@@ -20,12 +20,18 @@ import {
   getDrinkById,
   totalVolumeOz,
 } from "../drinks.js";
-import { consume, loadInventory } from "./inventory.js";
+import { consume, loadInventory, markSlotEmpty } from "./inventory.js";
 import { sendCommand, sendRaw } from "./serial.js";
 import { record as recordPour } from "./pour-history.js";
-import { loadCalibration, flowRateForSlot } from "./calibration.js";
+import {
+  loadCalibration,
+  flowRateForSlot,
+  observeSlotRate,
+} from "./calibration.js";
 import { readScaleStable } from "./maintenance.js";
 import { getEmptyRef } from "./glass-watch.js";
+import { createFlowSample } from "./flow-learn.js";
+import * as notifications from "./notifications.js";
 
 const ML_PER_OZ = 29.5735;
 // Flat density covers spirits/juices to within ~5%. Per-ingredient density
@@ -49,6 +55,65 @@ const POUR_TIMEOUT_BUFFER_SEC = 5;
 // auto-return). On timeout we fail the pour cleanly so the queue can advance.
 const GLASS_WAIT_TIMEOUT_MS = 120_000;
 
+// Pull the measured weight out of a firmware pour reply and convert to oz.
+//
+// Every reply that knows how much was dispensed puts the number last:
+//   DONE <grams>                     finished normally
+//   ERR no-flow <grams>              bottle empty / line blocked
+//   ERR pour-timeout <grams>         host-supplied cap elapsed
+//   ERR glass-removed <grams>        glass lifted mid-pour
+//   ERR scale-timeout <grams>        load cell stopped answering
+// while the replies that don't (ERR aborted from a STOP, ERR bad-slot, a bare
+// DONE from an older sketch) end on a word. Reading the last token covers both
+// without a per-reason table: a word parses as NaN and we answer null.
+function parsePouredOz(response) {
+  const tokens = response.trim().split(/\s+/);
+  const grams = parseFloat(tokens[tokens.length - 1]);
+  if (!Number.isFinite(grams) || grams < 0) return null;
+  return grams / (ML_PER_OZ * DEFAULT_DENSITY_G_PER_ML);
+}
+
+// A slot reported no-flow: the pump ran for the firmware's full no-flow window
+// without the weight advancing. Empty bottle, kinked tube, or detached hopper —
+// either way the slot can't deliver, so zero it and log it. Never throws: this
+// runs on the way to reporting the pour failure, and a bookkeeping problem must
+// not replace the real error the user needs to see.
+async function reportDeadSlot(slot, ingredientId, send) {
+  try {
+    await markSlotEmpty(slot);
+    await notifications.record({
+      message: `Slot ${slot} (${ingredientId}) stopped flowing — bottle empty or line blocked. Slot marked empty.`,
+      variant: "error",
+    });
+    // Same "record then announce" pattern hardware-health.js uses. serialPour
+    // has no direct broadcast handle, but `send` is already the driver's
+    // channel to every connected client, and index.js relays anything
+    // non-terminal through untouched.
+    send({ type: "NOTIFICATION_ADDED" });
+  } catch (err) {
+    console.error("failed to record dead slot:", err);
+  }
+}
+
+// Record an interrupted step — one cut short by a STOP or a firmware error.
+//
+// Unlike a completed step, this bills ONLY what the scale actually saw, and
+// nothing at all when it saw nothing. There's no falling back to the recipe
+// volume here: a pour that failed may have delivered none of it, and charging
+// a bottle for liquid that never left it is the one direction that makes
+// levels worse instead of better. Under-billing self-corrects at the next
+// refill; over-billing compounds.
+//
+// `response` is the firmware reply when there is one (it carries grams on
+// no-flow / pour-timeout / glass-removed / scale-timeout) and null on the STOP
+// path, where the firmware aborts without reporting. Either way the last
+// streamed PROGRESS line is the backstop.
+function billPartial(poured, ing, response, flow) {
+  const measuredOz = (response ? parsePouredOz(response) : null) ?? flow.lastOz();
+  if (measuredOz == null || measuredOz <= 0) return;
+  poured.push({ ...ing, actualOz: measuredOz });
+}
+
 export function serialPour(order, send) {
   const drink = order.customDrink || getDrinkById(order.drinkId);
   if (!drink) {
@@ -68,6 +133,32 @@ export function serialPour(order, send) {
   const totalVolume = totalVolumeOz(ingredients);
 
   let cancelled = false;
+  // Ingredients as actually dispensed — same entries as `ingredients`, each
+  // carrying the load cell's measured `actualOz` where we got one. Grows a step
+  // at a time so an interrupted drink still bills for what it managed. Only
+  // reaches consume(); pour history still records the recipe's volumes so a
+  // drink reads the same in the log whether it poured on hardware or mock.
+  const poured = [];
+  let billed = false;
+
+  // Charge the bottles for everything dispensed so far. Runs on every exit
+  // path, not just the happy one: a drink that dies on its third ingredient
+  // still physically emptied two into the glass, and the whole point of
+  // measuring pours is that levels stop drifting away from reality.
+  //
+  // Exactly-once, and never throws — this runs in a finally, so an error here
+  // would otherwise surface as a bogus SERIAL_ERROR after the real outcome
+  // was already reported.
+  async function billPoured() {
+    if (billed) return;
+    billed = true;
+    if (poured.length === 0) return;
+    try {
+      await consume(poured);
+    } catch (err) {
+      console.error("failed to consume inventory:", err);
+    }
+  }
 
   (async () => {
     const [inventory, calibration] = await Promise.all([
@@ -164,6 +255,9 @@ export function serialPour(order, send) {
       const ozPerSec = flowRateForSlot(calibration, slotRow.slot);
       const expectedSec = ing.volumeOz / ozPerSec;
       const maxSec = Math.ceil(expectedSec * POUR_TIMEOUT_SLOP + POUR_TIMEOUT_BUFFER_SEC);
+      // Collects the same PROGRESS stream the UI bar rides on, to measure what
+      // this pump actually managed and feed it back into calibration.
+      const flow = createFlowSample();
       const response = await sendCommand(
         `POUR ${slotRow.slot} ${grams.toFixed(2)} ${maxSec}`,
         {
@@ -176,6 +270,7 @@ export function serialPour(order, send) {
             const parts = body.split(/\s+/);
             const gramsPoured = parseFloat(parts[1]);
             if (!isFinite(gramsPoured)) return;
+            flow.add(gramsPoured);
             const ozPoured =
               gramsPoured / (ML_PER_OZ * DEFAULT_DENSITY_G_PER_ML);
             const pct = Math.min(
@@ -196,16 +291,42 @@ export function serialPour(order, send) {
 
       // STOP path: cancel() set `cancelled` and the firmware's "ERR aborted"
       // is what resolves this await. cancel() already emitted POUR_CANCELLED,
-      // so just exit before touching anything else.
-      if (cancelled) return;
+      // so just bank what made it into the glass and exit.
+      if (cancelled) {
+        billPartial(poured, ing, null, flow);
+        return;
+      }
       if (response.startsWith("ERR")) {
         cancelled = true;
+        billPartial(poured, ing, response, flow);
+        // no-flow is the one failure that says something specific about the
+        // hardware: the pump ran and the weight never moved. Take the slot out
+        // of service before reporting, so the next guest gets a blocked drink
+        // instead of rediscovering the same dead bottle.
+        if (response.startsWith("ERR no-flow")) {
+          await reportDeadSlot(slotRow.slot, ing.name, send);
+        }
         send({
           type: "POUR_ERROR",
           code: response,
           ingredient: ing.name,
         });
         return;
+      }
+
+      // "DONE <actual_grams>" — what the load cell says really landed in the
+      // glass, which is what we bill the bottle for. A reply without a number
+      // (older sketch, failed settling read) falls back to the recipe volume:
+      // the step did finish, so the liquid did leave the bottle.
+      const actualOz = parsePouredOz(response);
+      poured.push(actualOz == null ? ing : { ...ing, actualOz });
+
+      // Refine this slot's flow rate from the pour we just did. Fire-and-forget
+      // like consume/recordPour below: a calibration write must never delay or
+      // fail the drink. Returns null on pours too small to measure honestly.
+      const observed = flow.ozPerSec();
+      if (observed != null) {
+        observeSlotRate(slotRow.slot, observed).catch(() => {});
       }
 
       cumulativeVolume += ing.volumeOz;
@@ -225,24 +346,29 @@ export function serialPour(order, send) {
       status: "pouring",
     });
 
-    consume(ingredients).catch(() => {});
     recordPour({
       drinkId: drink.id,
       drinkName: drink.name,
       ingredients,
     }).catch(() => {});
     send({ type: "POUR_COMPLETE", drinkId: drink.id });
-  })().catch((err) => {
-    console.error("serialPour error:", err);
-    if (!cancelled) {
-      cancelled = true;
-      send({
-        type: "POUR_ERROR",
-        code: "SERIAL_ERROR",
-        message: err.message,
-      });
-    }
-  });
+  })()
+    // Every path out of the pour lands here — finished, failed, cancelled, or
+    // thrown — so the bottles are charged for whatever actually left them.
+    // As a .finally() rather than a try block inside the body: same guarantee,
+    // without re-indenting the whole pour under an extra level.
+    .finally(billPoured)
+    .catch((err) => {
+      console.error("serialPour error:", err);
+      if (!cancelled) {
+        cancelled = true;
+        send({
+          type: "POUR_ERROR",
+          code: "SERIAL_ERROR",
+          message: err.message,
+        });
+      }
+    });
 
   return function cancel() {
     if (cancelled) return;
