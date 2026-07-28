@@ -5,51 +5,11 @@
 import { drinks, shotIngredients } from "./drinks.js";
 import { assignedIngredientIds } from "./inventory-store.js";
 import { recordedIngredientIds } from "./ingredient-store.js";
+import { INGREDIENT_COLORS } from "./ingredient-defaults.js";
 
-// Approximate liquid colors used by the layered-glass visualizer. Picked to
-// read at a glance on the kiosk's dark surface — saturated enough that small
-// bands stay visible, but tuned toward "what the bottle looks like" rather
-// than candy-bright. Spirit colors mirror shotIngredients[].color where they
-// overlap. Unknown IDs fall back to a neutral grey via ingredientColor().
-const INGREDIENT_COLORS = {
-  gin: "#D6E8EC",
-  vodka: "#E8EEF2",
-  "vanilla-vodka": "#F0E8C0",
-  whiskey: "#C98A3F",
-  "light-rum": "#E8D8B0",
-  "dark-rum": "#8C5A2A",
-  "coconut-rum": "#EDE6CC",
-  tequila: "#E8E0A8",
-  campari: "#D13B2F",
-  vermouth: "#EDE0B0",
-  "sweet-vermouth": "#A8482F",
-  "triple-sec": "#F0D88A",
-  "blue-curacao": "#1A8FE0",
-  cointreau: "#F0E8D8",
-  "st-germain": "#EFE5C0",
-  kahlua: "#3A2418",
-  midori: "#6BC44A",
-  hpnotiq: "#7FD3D9",
-  "peach-schnapps": "#F4B88A",
-  "simple-syrup": "#F2E8C9",
-  bitters: "#5A1F18",
-  soda: "#DCEEF6",
-  "lemon-lime-soda": "#E8EFC8",
-  "lemon-juice": "#F4E690",
-  "lime-juice": "#C8DC75",
-  "orange-juice": "#F39C2A",
-  "cranberry-juice": "#B8203A",
-  "pineapple-juice": "#F6CB52",
-  "grapefruit-juice": "#F2A8A8",
-  "coconut-cream": "#F0EAD6",
-  orgeat: "#E8D9B0",
-  grenadine: "#C2113C",
-  "ginger-beer": "#E0C68A",
-  "ginger-ale": "#F0E0B0",
-  cola: "#5A341F",
-  "mexican-beer": "#EBC872",
-};
-
+// The palette itself lives in ingredient-defaults.js so the backend's LED
+// driver can share it — this module imports the browser-only stores above and
+// so can't be imported from Node.
 export function ingredientColor(id) {
   return INGREDIENT_COLORS[id] ?? "#888888";
 }

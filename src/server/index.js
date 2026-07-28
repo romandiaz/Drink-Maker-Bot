@@ -224,9 +224,10 @@ function startQueuedPour(entry) {
           stepIndex: event.stepIndex,
         });
         // Drive the strip: a soft "waiting" pulse until a glass is confirmed,
-        // then the filling progress bar. pct climbs across all ingredients.
+        // then the filling progress bar. pct climbs across all ingredients;
+        // step tints the dispenser zone with the ingredient now dispensing.
         if (event.status === "waiting-for-glass") setLedMode("waiting");
-        else setLedMode("pouring", { pct: event.pct });
+        else setLedMode("pouring", { pct: event.pct, ingredient: event.step });
       } else if (event.type === "POUR_COMPLETE") {
         // Celebrate until the finished drink is lifted off — the glass-removal
         // watcher below returns the strip to idle.
