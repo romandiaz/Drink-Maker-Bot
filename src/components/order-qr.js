@@ -1,21 +1,19 @@
-// Idle-screen card that points guests at the mobile order page.
+// Idle-screen card that gets guests onto the mobile order page.
 //
-// What the code contains depends on how the machine is networked, because the
-// two cases need different things from a guest's phone:
+// Shown ONLY when the machine is running its own AP (network mode "host").
+// The code is a "WIFI:" join string, not a URL: the whole point is the guest
+// who hasn't joined the network yet, and their phone can't reach the Pi at
+// all, so the code has to hand over credentials first. iOS 11+ and Android
+// read this format natively from the camera app; joining trips the captive
+// portal, which lands them on welcome.html and onward to /order.
 //
-//   host   — the Pi is running its own AP. The code is a "WIFI:" join string.
-//            A URL would be useless here: a phone that hasn't joined the
-//            network can't reach the Pi at all, so the code has to hand over
-//            credentials first. iOS 11+ and Android read this format natively
-//            from the camera app; joining trips the captive portal, which
-//            lands them on welcome.html and onward to /order.
-//
-//   client — the Pi is on the house Wi-Fi. Guests are already on the network,
-//            so the join step is unnecessary and the code goes straight to
-//            /order at the Pi's LAN address.
-//
-// Anything else — no Wi-Fi, or an interface with no address yet — renders
-// nothing, rather than a code that scans into a dead end.
+// Every other network state renders nothing. That includes client mode, where
+// the Pi is on the house Wi-Fi and a plain URL to /order would in fact work —
+// guests there are already on the network. Suppressing it is a deliberate
+// call for a quieter attract screen: on a home network the people using the
+// machine are the ones who set it up, so the discovery problem the QR solves
+// isn't really there. Re-adding that branch means an ip + port lookup from
+// /api/network/status and a `http://<ip>:<port>/order` payload.
 //
 // The payload is read once per mount. A network-mode change mid-idle won't be
 // picked up, which is fine: changing it means going through the admin Network
@@ -40,29 +38,15 @@ function wifiJoinString(ssid, password) {
 
 async function resolvePayload() {
   const status = await getJSON("/api/network/status");
+  if (status?.mode !== "host") return null;
 
-  if (status?.mode === "host") {
-    const hotspot = await getJSON("/api/network/hotspot");
-    if (!hotspot?.ssid) return null;
-    return {
-      text: wifiJoinString(hotspot.ssid, hotspot.password),
-      caption: "Scan to join",
-      detail: hotspot.ssid,
-    };
-  }
-
-  if (status?.mode === "client" && status.ip) {
-    // Take the port from the page we're being served on rather than assuming
-    // 3000, so a relocated backend still produces a reachable URL.
-    const port = location.port ? `:${location.port}` : "";
-    return {
-      text: `http://${status.ip}${port}/order`,
-      caption: "Scan to order",
-      detail: `${status.ip}${port}`,
-    };
-  }
-
-  return null;
+  const hotspot = await getJSON("/api/network/hotspot");
+  if (!hotspot?.ssid) return null;
+  return {
+    text: wifiJoinString(hotspot.ssid, hotspot.password),
+    caption: "Scan to join",
+    detail: hotspot.ssid,
+  };
 }
 
 // Returns an element immediately and fills it in once the network state is

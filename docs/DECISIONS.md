@@ -754,18 +754,22 @@ drink list.
 
 A corner card on the attract screen gets guests onto the order page.
 
-- **In AP mode it encodes Wi-Fi credentials, not a URL.** This is the whole
-  point and the easiest thing to get wrong: the feature exists for guests who
-  *haven't joined the network yet*, and those phones cannot reach
-  `http://10.42.0.1:3000/order` at all. A URL QR would scan straight into a
-  dead end — worse than no QR. The card emits a `WIFI:T:WPA;S:…;P:…;;` join
-  string, which iOS 11+ and Android read natively from the camera app; joining
-  trips the captive portal, which already lands them on `welcome.html`.
-- **In client mode it encodes the order URL.** On the house Wi-Fi guests are
-  already on the network, so the join step is pointless and the code should go
-  straight to `/order` at the Pi's LAN address. Port comes from `location.port`
-  rather than a hardcoded 3000.
-- **With no Wi-Fi or no IP it renders nothing.** Absent beats a dead end.
+- **It encodes Wi-Fi credentials, not a URL.** This is the whole point and the
+  easiest thing to get wrong: the feature exists for guests who *haven't joined
+  the network yet*, and those phones cannot reach `http://10.42.0.1:3000/order`
+  at all. A URL QR would scan straight into a dead end — worse than no QR. The
+  card emits a `WIFI:T:WPA;S:…;P:…;;` join string, which iOS 11+ and Android
+  read natively from the camera app; joining trips the captive portal, which
+  already lands them on `welcome.html`.
+- **It appears only in AP ("host") mode.** Every other network state renders
+  nothing. Client mode — the Pi on the house Wi-Fi — was briefly built to show
+  a plain `/order` URL instead, and that does work, since guests there are
+  already on the network. It was removed in favour of a quieter attract screen:
+  on a home network the people using the machine are generally the ones who set
+  it up, so the discovery problem the QR solves isn't really present. Restoring
+  it means reading `ip` from `/api/network/status` and emitting
+  `http://<ip>:<port>/order`; the reasoning is recorded in `order-qr.js` so the
+  branch can come back without re-deriving it.
 - **The encoder is vendored** (`src/components/qr.js`), the only borrowed
   algorithm in the tree. Shelling out to the `qrencode` apt package — the way
   `network.js` already shells out to `nmcli` — was the alternative and would
