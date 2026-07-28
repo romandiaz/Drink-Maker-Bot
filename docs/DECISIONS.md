@@ -605,3 +605,249 @@ finished drink is lifted off. Wiring is documented in
 - **Bring-up aid: a "Test LED strip" button** in admin Maintenance
   (`POST /api/maintenance/led-test`) cycles every mode for ~7s under the machine
   lock, so wiring can be verified without pouring a drink.
+- **Strip sizes are code constants, not env vars.** `BAR_COUNT` (60) and
+  `DISP_COUNT` (20, the chained dispenser strip) live in `leds.js` with
+  `LED_COUNT` derived from their sum — a single-purpose appliance sizes its
+  hardware in version control, like `SLOT_COUNT`. The only device env the
+  service needs is `LED_STRIP=ws2812` (set by `install-kiosk.sh`);
+  `LED_BAR_COUNT` / `LED_DISP_COUNT` remain as optional overrides for a
+  different build. Earlier this lived in systemd env, which split the config
+  off-repo and made the two counts easy to set inconsistently.
+
+## Dispenser zone pours in the ingredient's color
+
+The dispenser strip flowed a fixed green for every ingredient. It now tints to
+whatever is actually coming out of the spout, driven by the `step` already on
+every `POUR_PROGRESS` event — no new signal.
+
+- **Only the dispenser is tinted; the bar stays green.** The bar is the
+  progress indicator, and re-coloring it per step would trade a readable
+  "how far along am I" signal for decoration. Splitting the two zones by job
+  (bar = progress, dispenser = what's flowing) keeps both legible.
+- **The palette moved to `ingredient-defaults.js`.** `INGREDIENT_COLORS` lived
+  in `src/ingredients.js`, which imports the browser-only WS stores and so
+  can't be loaded from Node. `ingredient-defaults.js` was already the shared
+  DOM-free module for exactly this reason, so the map moved there and
+  `ingredients.js` re-exports `ingredientColor()` unchanged — `glass.js` and
+  every other consumer were untouched. The module's remit widened slightly
+  (it's now "static per-ingredient data", not only attribute-store seeds).
+- **Colors are normalized to full brightness for the strip.** The catalog
+  palette is tuned for a dark screen, which wants the opposite of what a strip
+  wants: a screen renders kahlua `#3A2418` as dark brown, but an LED can only
+  emit light, so that value is a pixel that's essentially off. `ledColorFor()`
+  scales each color until its brightest channel hits 255, preserving hue and
+  relative saturation — kahlua becomes a warm amber (4.4× boost), cola and
+  bitters likewise. Genuinely clear spirits (gin, vodka, soda) land near-white,
+  which is honest but does mean they're not distinguishable from each other on
+  the strip. Accepted: the alternative is inventing colors for colorless
+  liquids. The `ready` glitter is still distinct from them by motion, not hue.
+- **Unknown ingredients keep the old green, not the catalog's grey.**
+  `ingredientColor()` falls back to `#888888`, which on a strip is a murky
+  off-white that reads as a fault rather than a pour. An admin-added ingredient
+  with no palette entry simply pours green, as everything did before.
+- **The step change drives its own crossfade.** Switching gin → campari isn't a
+  mode change, so `setLedMode`'s existing fade never fired for it; the
+  ingredient branch calls `startFade()` itself when already in `pouring`. The
+  resolve is guarded on the id actually changing, so it runs once per step
+  rather than on every progress event — which also keeps the new
+  `[leds] dispenser <id> -> rgb(...)` log as quiet as the mode log.
+- **The self-test sweeps campari / midori / blue-curaçao.** Three far-apart
+  hues, so a GRB-vs-RGB strip miswiring is obvious at a glance during bring-up
+  instead of showing up as one subtly wrong drink later.
+
+## The scale closes the loop on inventory and calibration
+
+Three changes that all cash in the same asset: on real hardware every pour
+already weighs itself, and until now we threw that measurement away once the
+progress bar had used it.
+
+### Bottle levels bill the measurement, not the recipe
+
+- **`consume()` deducts `actualOz` when the caller supplies it.** `serialPour`
+  parses the firmware's `DONE <grams>` and attaches it per ingredient; `mockPour`
+  supplies nothing and keeps the old recipe-volume behavior, so dev and hardware
+  stay consistent in shape if not in precision. The point is drift: per-pour
+  error used to accumulate in one direction across a whole bottle, so a level
+  that started accurate slowly stopped being. Billing the measurement makes it
+  self-correcting.
+- **An absurd measurement falls back to the recipe volume** (`MAX_MEASURED_RATIO`
+  = 2× requested). The firmware stops the pump at target-minus-guard, so a
+  healthy pour always lands near target; a value twice that came from someone
+  leaning on the platform, not from the pump. Bounds what one bad reading can do
+  to a bottle level without discarding honest small variance.
+- **Pour history still records recipe volumes, not measured ones.** History
+  feeds the dashboard, and `mockPour` can't produce measurements — mixing
+  sources would make the same drink read differently depending on where it
+  poured. Worth revisiting if the dashboard ever needs true consumption.
+### Interrupted pours bill for what actually left the bottle
+
+This reverses the earlier "inventory is consumed on `POUR_COMPLETE`, not per
+step" decision for the hardware path. That rule existed because a cancelled
+pour left physical state ambiguous — *how much actually dispensed?* — and
+halving the decrement would have been guesswork. It isn't guesswork any more:
+the scale measures every step, so the question the original decision couldn't
+answer now has a number attached.
+
+- **`consume()` runs from a `.finally()` on the pour promise**, so every exit
+  path — finished, failed, cancelled, or thrown — charges the bottles for what
+  they gave up. A drink that dies on its third ingredient still physically
+  emptied two into the glass. Guarded to run exactly once, and it swallows its
+  own errors: it runs after the outcome has been reported, so a failure here
+  must not resurface as a bogus `SERIAL_ERROR`.
+- **A `.finally()` rather than a `try` block inside the pour body.** Identical
+  guarantee, without re-indenting ~200 lines of unrelated pour logic under an
+  extra level.
+- **The firmware reports grams on its failures too**, not just on `DONE` —
+  `no-flow`, `pour-timeout`, `glass-removed`, and `scale-timeout` all carry the
+  weight delivered before they gave up. `parsePouredOz()` reads the last token
+  of any reply, so one function covers every form: replies that don't know the
+  volume (`ERR aborted` from a STOP, `ERR bad-slot`) end on a word, which parses
+  as NaN and answers null. No per-reason table to keep in sync with the sketch.
+- **A cancelled pour is billed from the last `PROGRESS` line.** A STOP makes the
+  firmware abort without reporting grams, so the stream is the only measurement
+  left — and at a 250ms cadence it's at most a quarter-second stale.
+- **An interrupted step never falls back to the recipe volume.** This is the
+  one asymmetry worth stating plainly: a *completed* step with an unreadable
+  reply bills the recipe volume (it finished, so the liquid left the bottle),
+  but an *interrupted* step with no measurement bills nothing. A failed pour may
+  have delivered none of what was asked for, and charging a bottle for liquid
+  that never left it is the only direction that makes levels worse rather than
+  better. Under-billing self-corrects at the next refill; over-billing compounds.
+- **Pour history still records only completed drinks, at recipe volumes.** So a
+  failed drink now moves inventory without appearing in history. That's a real
+  divergence, and it's the honest one: the bottle genuinely emptied, and the
+  drink genuinely wasn't made. Revisit if the dashboard ever needs to reconcile
+  the two.
+
+## "Your usual" on the mobile order page
+
+A returning phone gets one-tap repeats of what it has ordered before, above the
+drink list.
+
+- **Stored on the phone, not the server.** `clientId` already reaches the live
+  pour job, so server-side attribution was available — but it would have meant
+  threading the id through both pour drivers into `recordPour`, and it would
+  have de-anonymised the admin History tab as a side effect. A guest's drinking
+  history is a personal convenience, not the machine state CLAUDE.md's
+  localStorage rule is about. `src/order-usual.js` sits alongside
+  `order-client-id.js`, which already owns per-device state. Cost: clearing site
+  data forgets it, and the kiosk can't show it.
+- **A "usual" is drink + strength + amount**, not just the drink. One tap has to
+  reproduce what the guest actually had, so a strong double Margarita is a
+  different usual from a plain single.
+- **Recorded only once the queue accepts the order**, so a rejected (queue-full)
+  order never becomes someone's usual.
+- **Ranked by count, tie-broken by recency**, showing at most three.
+- **The list is kept newest-first by construction rather than sorted on a
+  timestamp.** Two orders in the same millisecond share a `lastAt`, and a stable
+  sort then falls back to array order — which is oldest-first, so pruning the
+  tail would drop exactly the entries worth keeping. Unshifting on write removes
+  the failure mode instead of making it rarer. (A test caught this; a guest
+  ordering 25 drinks in one millisecond would not have.)
+- **Hidden while a category filter is active**, and hidden for usuals whose
+  drink was deleted or is currently unpourable — the same availability rule the
+  main list uses. A shortcut that ignored the filter would read as a bug.
+- **One tap goes straight to the queue.** The full sheet is still one tap away
+  on the drink's own card below, so nothing is lost by skipping it here.
+
+## QR code on the idle screen
+
+A corner card on the attract screen gets guests onto the order page.
+
+- **In AP mode it encodes Wi-Fi credentials, not a URL.** This is the whole
+  point and the easiest thing to get wrong: the feature exists for guests who
+  *haven't joined the network yet*, and those phones cannot reach
+  `http://10.42.0.1:3000/order` at all. A URL QR would scan straight into a
+  dead end — worse than no QR. The card emits a `WIFI:T:WPA;S:…;P:…;;` join
+  string, which iOS 11+ and Android read natively from the camera app; joining
+  trips the captive portal, which already lands them on `welcome.html`.
+- **In client mode it encodes the order URL.** On the house Wi-Fi guests are
+  already on the network, so the join step is pointless and the code should go
+  straight to `/order` at the Pi's LAN address. Port comes from `location.port`
+  rather than a hardcoded 3000.
+- **With no Wi-Fi or no IP it renders nothing.** Absent beats a dead end.
+- **The encoder is vendored** (`src/components/qr.js`), the only borrowed
+  algorithm in the tree. Shelling out to the `qrencode` apt package — the way
+  `network.js` already shells out to `nmcli` — was the alternative and would
+  have been ~15 lines, but it wouldn't work on a dev laptop and adds a system
+  dependency. Vendoring keeps the project's no-npm-dependency rule intact and
+  works everywhere.
+- **It is deliberately narrow: byte mode, EC level M, versions 1-10.** That's
+  what keeps the spec tables small enough to audit — a general encoder needs all
+  four EC levels across 40 versions. 213 bytes is far more than a join string or
+  a LAN URL needs, and it throws rather than silently truncating past that.
+- **It exceeds the 200-line file guideline, knowingly.** It is transcribed
+  ISO/IEC 18004, not authored logic, and splitting it would only scatter one
+  algorithm across files. It is not meant to be maintained by hand — the check
+  is the test, which round-trips encode→decode, verifies Reed-Solomon syndromes
+  vanish, and compares the block-structure table, BCH version strings, and
+  free-module counts against published spec values. Re-run it if this is ever
+  touched.
+- **A white card on a black UI.** Scanners want dark modules on a light field,
+  so this is the one deliberately pale surface in the kiosk. Kept small and
+  pinned bottom-right, absolutely positioned so the centred featured drink
+  doesn't move and its absence costs no layout.
+- **The payload is read once per mount.** A network-mode change mid-idle isn't
+  picked up, which is fine: changing it means visiting the admin Network tab,
+  and leaving admin re-mounts idle.
+- **The Wi-Fi passphrase is on an always-on screen.** Deliberate — it's a party
+  appliance whose AP password is meant to be shared, and the alternative is
+  reading it aloud. Worth knowing before pointing the kiosk at a network whose
+  password isn't disposable.
+
+### `no-flow` takes the slot out of service
+
+- **`ERR no-flow` zeroes the slot and files a notification.** The firmware
+  already distinguishes "pump ran, weight never moved" from every other failure;
+  nothing consumed that distinction. Now the slot is marked empty, which is what
+  actually stops the bleeding: the UI shows it empty and drinks needing it are
+  blocked, instead of each guest in turn rediscovering the same dead bottle.
+- **Zeroing is a claim, and it's the right one even when the cause is a clog.**
+  no-flow means empty, kinked, or detached; we can't tell which from here, but
+  all three mean the slot can't deliver. Zero is the honest "unavailable"
+  signal, and a refill or a fixed line is followed by an inventory edit anyway.
+- **The notification uses the raw ingredient ID** ("Slot 6 (campari)…"). The
+  pretty-name map lives in the browser-only `ingredients.js`; moving it for one
+  admin-facing diagnostic line wasn't worth a second module migration.
+- **`serialPour` announces via its `send` callback, not a broadcast handle.**
+  It mirrors `mockPour`'s signature so `index.js` can swap the two on one env
+  check, and threading `broadcast` in would have meant changing both. `send` is
+  already the driver's channel to every client, and `index.js` relays anything
+  non-terminal through untouched.
+
+### Flow rates learn from ordinary pours
+
+- **Every successful step folds its measured rate into that slot's
+  calibration**, so the manual wizard becomes a first-run tool rather than
+  routine maintenance. It still works, and is still the right way to seed a
+  brand-new slot.
+- **The rate is measured across the PROGRESS window, never total command
+  time.** This is the whole reason `flow-learn.js` exists as its own module. A
+  `POUR` spends roughly 1.7s per call on things that aren't pumping: a 10-sample
+  baseline average (~1s at the cell's 10Hz), a 50ms settle, then 150ms plus a
+  5-sample settling read at the end. Dividing volume by total duration would
+  report every pump as far slower than it is, worst on small pours — a 0.25oz
+  dash from a true 0.25 oz/s pump measures as ~0.09 oz/s, and would drag that
+  slot down every time someone ordered an Old Fashioned. First-to-last PROGRESS
+  sample excludes both ends.
+- **Small pours teach nothing, and that's reported as `null`.** Gates are ≥3
+  samples, ≥1s span, ≥5g moved. The two span gates cover opposite failure
+  modes: the time gate stops serial jitter dominating a fast pump's short
+  window, the weight gate stops load-cell noise dominating a slow one's light
+  window. A dash of bitters simply doesn't qualify.
+- **One pour nudges, it doesn't set** (`LEARN_ALPHA` = 0.2). A slot with no
+  stored rate takes its first observation whole — there's nothing to average
+  against and the seeded default is a guess worth replacing immediately. After
+  that, ~20 pours converge on a changed rate, which is fast enough to track new
+  tubing or a thicker syrup and slow enough that one odd pour doesn't move much.
+- **Observations more than 3× off the stored rate are discarded.** A pump
+  doesn't triple in speed between drinks; a reading that says so came from a
+  bumped platform or a mid-pour top-up. Real drift is gradual and well inside
+  the band.
+- **A step that succeeded inside a drink that later failed still teaches.** Its
+  measurement is valid regardless of what happened two ingredients later.
+- **Learning writes are fire-and-forget**, like `consume` and `recordPour`. A
+  calibration write must never delay or fail a drink.
+- **No provenance flag on learned-vs-manual rates.** The admin UI shows a rate;
+  where it came from doesn't change what it means. Worth adding only if someone
+  is ever surprised by a rate moving under them.
