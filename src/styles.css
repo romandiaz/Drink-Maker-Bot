@@ -1293,6 +1293,46 @@ body {
 
 .screen--idle {
   gap: 12px;
+  /* Anchors the order QR card to a corner. Matches .screen--surprise, which
+     positions its reel the same way. */
+  position: relative;
+}
+
+/* ---------- Idle order QR ----------
+   Light-on-dark by necessity: scanners want dark modules on a light field, so
+   this is the one deliberately pale surface in the UI. Kept small and pinned
+   bottom-right so the centred featured drink is untouched, and absolutely
+   positioned so its absence (no network, no IP) costs no layout. */
+.idle-qr {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px 6px;
+  background: #fff;
+  border-radius: var(--radius-md);
+}
+.idle-qr[hidden] {
+  display: none;
+}
+.idle-qr__caption {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #111;
+}
+.idle-qr__detail {
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 500;
+  color: #555;
 }
 /* Header right-side cluster used by idle (admin + clock + ready) and category
    (admin + ready). Keeps spacing consistent across screens. */

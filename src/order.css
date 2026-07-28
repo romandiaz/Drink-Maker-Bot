@@ -1255,3 +1255,60 @@ body.tray-empty .order-tray {
 .toast-scrim {
   z-index: 29;
 }
+
+/* ---------- "Your usual" — one-tap repeats ------------------------------ */
+
+/* Sits between the sticky header and the drink list, so a returning guest's
+   shortcut is the first thing under the filters without displacing the
+   catalog. Hidden entirely (no element rendered) when this phone has nothing
+   repeatable, so it costs a first-time guest no vertical space. */
+.order-usual {
+  padding: 12px 16px 0;
+}
+
+.order-usual__label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+
+/* Wraps rather than scrolls: at most three chips, and a hidden horizontal
+   scroller would bury the third one on a narrow phone. */
+.order-usual__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.order-usual__chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  /* 44px min touch target, per the interaction rules. */
+  min-height: 44px;
+  padding: 0 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-emphasis);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.order-usual__chip:active {
+  background: var(--bg-surface-2);
+}
+
+.order-usual__chip[disabled] {
+  color: var(--text-disabled);
+  border-color: var(--border-default);
+}
+
+.order-usual__meta {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}

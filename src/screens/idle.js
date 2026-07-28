@@ -7,6 +7,7 @@ import { isDrinkPourable } from "../inventory-store.js";
 import { isCategoryEnabled } from "../category-store.js";
 import { timeBucket } from "./idle-timeofday.js";
 import { requestAdminAccess } from "../admin-auth.js";
+import { orderQrCard } from "../components/order-qr.js";
 
 
 const ROTATE_MS = 30000;
@@ -117,6 +118,10 @@ export function idle() {
   feature.appendChild(taglineEl);
 
   element.appendChild(feature);
+
+  // Absolutely positioned, so it doesn't shift the centred featured drink.
+  // Hides itself when there's no reachable order URL to encode.
+  element.appendChild(orderQrCard());
 
   const hint = document.createElement("div");
   hint.className = "idle-hint";

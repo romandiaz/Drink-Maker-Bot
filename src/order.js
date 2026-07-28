@@ -32,6 +32,7 @@ import {
 } from "./queue-store.js";
 import { onMachineStatus } from "./machine-status.js";
 import { getClientId } from "./order-client-id.js";
+import { recordOrder, getUsuals } from "./order-usual.js";
 import {
   openSheet,
   refreshSheet,
@@ -281,6 +282,74 @@ function renderCard(drink) {
   return card;
 }
 
+// One-tap repeats of what this phone has ordered before. Returns null — and
+// the caller appends nothing — for a guest with no history, or whose usuals
+// are all currently unpourable. Hidden while a category filter is active: a
+// shortcut that ignored the filter would read as a bug.
+function renderUsuals() {
+  if (state.activeCategory !== null) return null;
+  const items = getUsuals(3)
+    .map((usual) => ({ usual, drink: getDrinkById(usual.drinkId) }))
+    // A usual can outlive its drink — the recipe may have been deleted, or its
+    // bottle run dry since. Same availability rule the main list uses.
+    .filter(({ drink }) => drink && isAvailable(drink));
+  if (items.length === 0) return null;
+
+  const wrap = document.createElement("section");
+  wrap.className = "order-usual";
+  const label = document.createElement("div");
+  label.className = "order-usual__label";
+  label.textContent = items.length > 1 ? "Your usuals" : "Your usual";
+  wrap.appendChild(label);
+
+  const row = document.createElement("div");
+  row.className = "order-usual__row";
+  for (const { usual, drink } of items) row.appendChild(renderUsualChip(usual, drink));
+  wrap.appendChild(row);
+  return wrap;
+}
+
+function renderUsualChip(usual, drink) {
+  const chip = document.createElement("button");
+  chip.type = "button";
+  chip.className = "order-usual__chip";
+
+  const name = document.createElement("span");
+  name.className = "order-usual__name";
+  name.textContent = drink.name;
+  chip.appendChild(name);
+
+  const meta = usualMeta(usual);
+  if (meta) {
+    const metaEl = document.createElement("span");
+    metaEl.className = "order-usual__meta";
+    metaEl.textContent = meta;
+    chip.appendChild(metaEl);
+  }
+
+  if (isQueueFull()) chip.setAttribute("disabled", "");
+  // Straight to the queue — that's the whole point. The full sheet is still
+  // one tap away on the drink's own card below.
+  chip.addEventListener("click", () => {
+    placeOrder(drink, {
+      drinkId: drink.id,
+      strength: usual.strength,
+      amount: usual.amount,
+    });
+  });
+  return chip;
+}
+
+// Only name customisation that differs from a default order, so the common
+// case ("the same again") stays visually quiet.
+function usualMeta(usual) {
+  const bits = [];
+  if (usual.strength && usual.strength !== "regular") bits.push(usual.strength);
+  const amount = Number(usual.amount);
+  if (Number.isFinite(amount) && amount !== 1) bits.push(`${amount.toFixed(1)}x`);
+  return bits.join(" · ");
+}
+
 function renderList() {
   const wrap = document.createElement("section");
   wrap.className = "order-list";
@@ -325,6 +394,9 @@ async function placeOrder(drink, order) {
     showQueueToast(queueToasts.full());
     return;
   }
+  // Remember it only once the queue actually took it, so a rejected order
+  // never becomes someone's "usual". rerender() below surfaces the change.
+  recordOrder(order);
   // Successful add → the guest is now waiting on a "ready" signal, which is
   // the right moment to ask for OS notification permission (sticky across
   // visits, so we only get prompted once).
@@ -413,12 +485,17 @@ function rerender() {
   }));
   headerEl.appendChild(renderFilters());
 
-  // Header + list go between the tray (which stays last) and the top.
+  // Header, usuals, then list — all between the tray (which stays last) and
+  // the top. renderUsuals() is null when this phone has no repeatable order.
+  const usualsEl = renderUsuals();
   if (tray) {
     root.insertBefore(headerEl, tray);
+    if (usualsEl) root.insertBefore(usualsEl, tray);
     root.insertBefore(renderList(), tray);
   } else {
-    root.append(headerEl, renderList());
+    root.append(headerEl);
+    if (usualsEl) root.append(usualsEl);
+    root.append(renderList());
   }
 
   // The status banner and the category nav are layered independently against the
