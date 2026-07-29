@@ -13,6 +13,8 @@ import {
 } from "../maintenance.js";
 import { acquire as acquireMachine } from "../machine-state.js";
 import { runLedSelfTest } from "../leds.js";
+import * as cleanCycle from "../clean-cycle.js";
+import { loadCleaning } from "../cleaning-store.js";
 
 // Acquire the machine for `job`, run `fn`, and always release. Sends 409 if the
 // machine is busy, 200 with fn's result on success, 400 on failure. Validate
@@ -44,12 +46,46 @@ export async function maintenanceRoutes(req, res, urlPath) {
         throw new Error("invalid duration");
       }
       await withMachineLock(res, { kind: "maintenance", mode, slot }, async () => {
-        await runTimedPump(slot, durationSec * 1000);
+        // A flush runs with the tube in water, not in the bottle — charging the
+        // ingredient for it would walk every bottle's level down on each clean
+        // and fire low-stock alerts for stock that was never poured. Priming
+        // does move the real liquid, so that one still counts.
+        await runTimedPump(slot, durationSec * 1000, {
+          decrementInventory: mode !== "clean",
+        });
         return { ok: true, mode, slot, durationSec };
       });
     } catch (e) {
       sendJson(res, 400, { error: e.message });
     }
+    return true;
+  }
+
+  // The deep-clean cycle drives itself — it takes the machine lock on start and
+  // holds it across every stage (including the manual prompts), so none of
+  // these actions go through withMachineLock. Each returns the resulting cycle
+  // snapshot; the long-running part is followed over MACHINE_STATE instead.
+  if (urlPath === "/api/maintenance/clean" && req.method === "POST") {
+    await jsonRoute(res, async () => {
+      const body = await readJsonBody(req);
+      switch (body.action) {
+        case "start": await cleanCycle.start(); break;
+        case "next": await cleanCycle.next(); break;
+        case "repeat": await cleanCycle.repeat(); break;
+        case "skip-soak": cleanCycle.skipSoak(); break;
+        case "abort": cleanCycle.abort(); break;
+        case "override": await cleanCycle.override(); break;
+        default: throw new Error("unknown clean action");
+      }
+      return { ok: true, clean: cleanCycle.getCleanState() };
+    });
+    return true;
+  }
+
+  // Line contents + last-cleaned stamp. Separate from the cycle snapshot
+  // because the maintenance screen wants it when no cycle is running.
+  if (urlPath === "/api/maintenance/cleaning" && req.method === "GET") {
+    await jsonRoute(res, () => loadCleaning());
     return true;
   }
 

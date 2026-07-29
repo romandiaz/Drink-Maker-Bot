@@ -57,6 +57,7 @@ bartender-kiosk/
 │   ├── drinks.js                ← built-in drink + category catalog
 │   ├── ingredients.js           ← canonical ingredient ID list (derived from drinks)
 │   ├── ingredient-defaults.js   ← seed ABV / bottle-size values (shared frontend + backend)
+│   ├── clean-stages.js          ← deep-clean stage spec + durations (shared frontend + backend)
 │   ├── icons.js                 ← inline SVG icon set
 │   ├── format.js                ← oz/ml formatting helpers
 │   ├── slug.js                  ← name → id slug helper
@@ -116,6 +117,7 @@ bartender-kiosk/
 │   │   ├── editor-fields.js       ← shared form-row primitives
 │   │   ├── maint-ui.js            ← shared maintenance UI primitives (actionBtn / sectionHead / formatRate)
 │   │   ├── calibrate-modal.js     ← slot pump-calibration modal
+│   │   ├── clean-cycle-modal.js   ← guided deep-clean driver (view over server state)
 │   │   └── scale-modals.js        ← load-cell calibrate + live-read modals
 │   ├── server/
 │   │   ├── index.js               ← node:http + WebSocket entry; static serving, WS/queue, dispatches to routes/
@@ -127,6 +129,8 @@ bartender-kiosk/
 │   │   ├── inventory.js           ← inventory state + REST handlers
 │   │   ├── calibration.js         ← pump-rate calibration
 │   │   ├── maintenance.js         ← prime / purge / clean routines
+│   │   ├── clean-cycle.js         ← guided deep-clean state machine (owns the machine lock)
+│   │   ├── cleaning-store.js      ← persisted line contents + last-cleaned stamp
 │   │   ├── machine-state.js       ← ready / busy / error state machine
 │   │   ├── pour-history.js        ← persisted log of every pour
 │   │   ├── notifications.js       ← low-stock + error alerts
@@ -154,6 +158,7 @@ bartender-kiosk/
 │   │       ├── categories.json    ← persisted user categories
 │   │       ├── inventory.json     ← pump-slot assignments + levels
 │   │       ├── calibration.json   ← per-slot pump flow rates
+│   │       ├── cleaning.json      ← what the lines contain + last-cleaned stamp
 │   │       ├── ingredients.json   ← per-ingredient attributes (ABV, size, cost)
 │   │       ├── pour-history.json  ← log of every pour
 │   │       ├── notifications.json ← low-stock / error alerts

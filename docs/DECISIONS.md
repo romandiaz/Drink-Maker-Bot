@@ -855,3 +855,54 @@ A corner card on the attract screen gets guests onto the order page.
 - **No provenance flag on learned-vs-manual rates.** The admin UI shows a rate;
   where it came from doesn't change what it means. Worth adding only if someone
   is ever surprised by a rate moving under them.
+
+### The guided deep-clean cycle
+
+The old cleaning story was one button — "Flush all · 15s each" — that fired N
+sequential 15-second HTTP requests from the browser and greyed the card out
+until they finished. It worked, but it couldn't be watched, stopped, or trusted.
+
+- **Five stages, not one pass: drain → soap → soak → rinse → dry.** The
+  physical workflow is "pull the intake tubes and drop them in a jug", so every
+  stage is a manual prompt followed by a pump run across every loaded slot.
+  Draining first means the spirit left in the lines goes into a waste container
+  instead of diluting the soap. Soap alone isn't a clean — the soak is where the
+  sugar and oil film actually breaks down, so it's a stage in its own right
+  rather than an instruction buried in a note.
+- **The soak is 5 minutes and skippable.** Long enough to matter, short enough
+  that nobody abandons the cycle. Skipping is a judgement call, not a safety
+  problem — the lines are already full of soap either way.
+- **Rinse runs ~2× the soap stage** (25s/slot against 12s). Residual detergent
+  in a drinks machine is the one failure mode here that reaches a guest's glass,
+  so the default errs long, and every stage has a Repeat button for when the
+  runoff still foams.
+- **The cycle is server-owned, not browser-owned.** It runs ~20 minutes with
+  manual steps between stages; a tablet reload or a locked screen must not
+  orphan it. `clean-cycle.js` holds the state machine, publishes on
+  `MACHINE_STATE`, and the modal is a pure view that can be closed, reopened, or
+  opened on a second tablet without losing the thread.
+- **One machine lock for the whole cycle, including the manual prompts.**
+  Deliberately different from prime/flush, which take the lock per run. Between
+  stages the lines hold air, soap, or rinse water — never a drink — so the queue
+  must not pour through them. Holding the lock is also what makes the soap guard
+  work without touching the pour path at all.
+- **`linesState: "soap"` is a latch, and it's persisted.** The cycle refuses to
+  release the machine while soap is in the lines: aborting mid-soap parks in
+  `needs-rinse` (still holding the lock) rather than ending. The state lives in
+  `state/cleaning.json` so a crash or power cut can't launder it — the server
+  re-acquires the machine on boot if it comes up soapy. `override` is the escape
+  hatch for "I rinsed it by hand", and it's the only way out other than a rinse.
+- **Stages are fire-and-forget over HTTP.** A stage runs for minutes, so
+  `POST /api/maintenance/clean` returns the "running" snapshot immediately and
+  the client follows progress over the WebSocket. The alternative — holding a
+  6-minute request open — breaks on any proxy or sleeping tablet.
+- **The progress bar interpolates client-side from `stageStartedAt`/`stageEndsAt`.**
+  The server only publishes on slot boundaries, which for a 25s-per-slot rinse
+  is far too coarse to look alive. Two timestamps beat a per-second broadcast.
+- **Flush no longer decrements inventory; prime still does.** A flush runs with
+  the tube in water, so charging the ingredient for it walked every bottle's
+  level down on each clean and fired low-stock alerts for stock nobody poured.
+  Priming does move the real liquid, so it still counts. This was a bug, not a
+  design call — noted here because the asymmetry looks arbitrary otherwise.
+- **"Flush all" stays.** The guided cycle supersedes it for real cleaning, but a
+  single water pass on one sticky line is a genuinely different, faster job.

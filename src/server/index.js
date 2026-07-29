@@ -14,6 +14,7 @@ import { subscribe as subscribeInventory } from "./inventory.js";
 import * as drinksStore from "./drinks-store.js";
 import * as ingredientsStore from "./ingredients-store.js";
 import { subscribe as subscribeCalibration } from "./calibration.js";
+import { resumeIfUnsafe } from "./clean-cycle.js";
 // tareScale + readScale drive the live scale-reading WS session below; the rest
 // of the maintenance primitives are reached through the maintenance routes.
 import { tareScale, readScale } from "./maintenance.js";
@@ -475,6 +476,10 @@ if (process.env.SERIAL_PORT) {
 // Addressable LED strip. Runs the pour-lifecycle animation state machine.
 // Mock (no-op) sink unless LED_STRIP is set, so this is safe in laptop dev.
 initLeds();
+
+// If a deep clean was interrupted with soap still in the lines, take the
+// machine back before anything can be poured through it.
+await resumeIfUnsafe();
 
 server.listen(PORT, () => {
   console.log(`Bartender kiosk running at http://localhost:${PORT}`);

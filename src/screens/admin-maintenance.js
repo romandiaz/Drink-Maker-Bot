@@ -9,6 +9,8 @@ import {
   openScaleVisualizationModal,
 } from "../components/scale-modals.js";
 import { createBackupSection } from "./admin-backup.js";
+import { openCleanCycle } from "../components/clean-cycle-modal.js";
+import { totalSeconds, formatDuration } from "../clean-stages.js";
 
 // Maintenance view for the admin tab shell. Three groups of canned routines:
 //
@@ -34,6 +36,19 @@ import { createBackupSection } from "./admin-backup.js";
 const PRIME_DURATION_SEC = 6;
 const FLUSH_DURATION_SEC = 15;
 
+// Same shape as the other admin screens' copies. Not hoisted into a shared
+// module here — five other views already carry their own and unifying them is
+// a separate change.
+function relativeTime(iso) {
+  if (!iso) return "never";
+  const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return `${Math.floor(diffHr / 24)}d ago`;
+}
+
 function row(label, valueEl) {
   const wrap = document.createElement("div");
   wrap.className = "maint-meta";
@@ -50,8 +65,10 @@ export function adminMaintenanceView({ host, setMeta }) {
 
   let inventory = null;
   let calibration = null;
+  let cleaning = null;
   let busy = false;
   let calibrateModalEl = null;
+  let cleanModalEl = null;
   let unsubMachine = null;
 
   // The local `busy` flag covers in-flight admin requests from this tablet;
@@ -85,12 +102,14 @@ export function adminMaintenanceView({ host, setMeta }) {
   async function load() {
     setMeta("Loading…");
     try {
-      const [inv, cal] = await Promise.all([
+      const [inv, cal, clean] = await Promise.all([
         getJSON("/api/inventory"),
         getJSON("/api/calibration"),
+        getJSON("/api/maintenance/cleaning"),
       ]);
       inventory = inv;
       calibration = cal;
+      cleaning = clean;
       render();
       // Fetched separately and non-fatally: a backups-list hiccup shouldn't
       // blank the whole maintenance screen. The list re-renders when it lands.
@@ -208,6 +227,54 @@ export function adminMaintenanceView({ host, setMeta }) {
     return card;
   }
 
+  // The guided cycle is the real cleaning story; the Flush-all button below is
+  // kept as the quick single-pass version for a line that's just gone sticky.
+  function renderCleaning() {
+    const card = document.createElement("section");
+    card.className = "maint-card";
+    card.appendChild(
+      sectionHead("Cleaning", "Drain, soap, soak, rinse, dry — one guided pass")
+    );
+
+    const active = Boolean(getMachineStatus().job?.clean);
+    const soapy = cleaning?.linesState === "soap";
+
+    if (soapy) {
+      const warn = document.createElement("p");
+      warn.className = "maint-warning";
+      warn.textContent =
+        "The lines still contain soap. The machine can't pour until they've been rinsed.";
+      card.appendChild(warn);
+    }
+
+    const buttons = document.createElement("div");
+    buttons.className = "maint-quick";
+    buttons.style.gridTemplateColumns = "1fr";
+
+    const slotCount = loadedSlots().length;
+    const label = active
+      ? "Resume clean cycle"
+      : `Deep clean · about ${formatDuration(totalSeconds(slotCount))}`;
+    const start = actionBtn(label, { tone: active || soapy ? "warn" : "primary" });
+    // A cycle in progress holds the machine, so the card is locked — but the
+    // one button that gets you back to the cycle has to stay live.
+    if (active || soapy) start.dataset.alwaysEnabled = "1";
+    if (!active && slotCount === 0) {
+      start.disabled = true;
+      start.dataset.alwaysDisabled = "1";
+    }
+    start.addEventListener("click", openCleanModal);
+    buttons.appendChild(start);
+    card.appendChild(buttons);
+
+    const valueEl = document.createElement("span");
+    valueEl.className = "maint-meta__value";
+    valueEl.textContent = relativeTime(cleaning?.lastCleanedAt);
+    card.appendChild(row("Last cleaned", valueEl));
+
+    return card;
+  }
+
   function renderQuickActions() {
     const card = document.createElement("section");
     card.className = "maint-card";
@@ -233,7 +300,7 @@ export function adminMaintenanceView({ host, setMeta }) {
     const note = document.createElement("p");
     note.className = "maint-note";
     note.textContent =
-      "Prime: pulls liquid through air-filled tubing after a bottle swap. Flush: longer run; load water bottles in slots first.";
+      "Prime: pulls liquid through air-filled tubing after a bottle swap. Flush: a single water pass for one sticky line — put the intake tubes in water first. For a proper clean use the guided cycle above.";
     card.appendChild(note);
 
     return card;
@@ -379,6 +446,7 @@ export function adminMaintenanceView({ host, setMeta }) {
     element.innerHTML = "";
     if (!inventory || !calibration) return;
     element.appendChild(renderScaleCalibration());
+    element.appendChild(renderCleaning());
     element.appendChild(renderQuickActions());
     element.appendChild(renderSlotList());
     element.appendChild(renderReference());
@@ -419,6 +487,24 @@ export function adminMaintenanceView({ host, setMeta }) {
     });
   }
 
+  // Tracked separately from calibrateModalEl: the clean cycle outlives its
+  // modal (it's server-owned), so closing this one must not tear down anything
+  // but the view, and opening it must not evict a calibration modal.
+  function openCleanModal() {
+    if (cleanModalEl) return;
+    cleanModalEl = openCleanCycle({
+      host,
+      slotCount: loadedSlots().length,
+      onClose: async () => {
+        cleanModalEl = null;
+        try {
+          cleaning = await getJSON("/api/maintenance/cleaning");
+        } catch {}
+        render();
+      },
+    });
+  }
+
   function openScaleCalibrate() {
     if (calibrateModalEl) calibrateModalEl.remove();
     calibrateModalEl = openScaleCalibrateModal({
@@ -431,10 +517,28 @@ export function adminMaintenanceView({ host, setMeta }) {
     });
   }
 
+  async function refreshCleaning() {
+    try {
+      cleaning = await getJSON("/api/maintenance/cleaning");
+    } catch {}
+    render();
+  }
+
   function mount() {
     load();
     let lastStatus = getMachineStatus().status;
+    let lastCleanActive = Boolean(getMachineStatus().job?.clean);
     unsubMachine = onMachineStatus((s) => {
+      const cleanActive = Boolean(s.job?.clean);
+      // Only re-render on the edges — a running cycle publishes on every slot
+      // boundary, and rebuilding the whole card each time would fight the
+      // modal for the screen.
+      if (cleanActive !== lastCleanActive) {
+        lastCleanActive = cleanActive;
+        lastStatus = s.status;
+        refreshCleaning();
+        return;
+      }
       if (s.status === lastStatus) return;
       lastStatus = s.status;
       refreshDisabled();
@@ -445,6 +549,10 @@ export function adminMaintenanceView({ host, setMeta }) {
     if (calibrateModalEl) {
       calibrateModalEl.remove();
       calibrateModalEl = null;
+    }
+    if (cleanModalEl) {
+      cleanModalEl.closeModal();
+      cleanModalEl = null;
     }
     if (unsubMachine) {
       unsubMachine();

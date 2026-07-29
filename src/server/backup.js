@@ -21,6 +21,7 @@ import * as calibration from "./calibration.js";
 import * as pourHistory from "./pour-history.js";
 import * as notifications from "./notifications.js";
 import * as adminPin from "./admin-pin.js";
+import * as cleaningStore from "./cleaning-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE_DIR = resolve(__dirname, "state");
@@ -30,6 +31,7 @@ const BACKUPS_DIR = resolve(__dirname, "backups");
 const STORES = [
   drinksStore, categoriesStore, submissionsStore, inventory,
   ingredientsStore, calibration, pourHistory, notifications, adminPin,
+  cleaningStore,
 ];
 
 const BUNDLE_KIND = "bartender-kiosk-backup";
